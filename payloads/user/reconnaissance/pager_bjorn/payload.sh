@@ -9,8 +9,9 @@ PAYLOAD_DIR="/root/payloads/user/reconnaissance/pager_bjorn"
 
 #
 # Setup paths for Python and shared library
+# Python packages are bundled in lib/ directory
 #
-export PYTHONPATH="$PAYLOAD_DIR:$PYTHONPATH"
+export PYTHONPATH="$PAYLOAD_DIR/lib:$PAYLOAD_DIR:$PYTHONPATH"
 export LD_LIBRARY_PATH="$PAYLOAD_DIR:$LD_LIBRARY_PATH"
 
 #
@@ -161,44 +162,29 @@ check_network() {
 
 #
 # Check and install Bjorn dependencies automatically
+# Python packages are bundled in lib/ directory
 #
 check_dependencies() {
     LOG ""
     LOG "Checking dependencies..."
 
+    # Add bundled lib to PYTHONPATH for import checks
+    export PYTHONPATH="$PAYLOAD_DIR/lib:$PYTHONPATH"
+
     MISSING=""
 
-    # Check for nmap
+    # Check for nmap binary (only external dependency)
     if ! command -v nmap >/dev/null 2>&1; then
-        MISSING="$MISSING nmap"
-    fi
-
-    # Check for python-nmap
-    if ! python3 -c "import nmap" 2>/dev/null; then
-        MISSING="$MISSING python-nmap"
-    fi
-
-    # Check for paramiko (for SSH)
-    if ! python3 -c "import paramiko" 2>/dev/null; then
-        MISSING="$MISSING paramiko"
-    fi
-
-    # Check for getmac (for network scanner)
-    if ! python3 -c "import getmac" 2>/dev/null; then
-        MISSING="$MISSING getmac"
+        MISSING="nmap"
     fi
 
     if [ -n "$MISSING" ]; then
         LOG ""
-        LOG "red" "Missing dependencies:$MISSING"
+        LOG "red" "Missing: $MISSING"
         LOG ""
-        LOG "Installing dependencies automatically..."
-        LOG ""
+        LOG "Installing nmap..."
         opkg update 2>&1 | while IFS= read -r line; do LOG "  $line"; done
-        opkg install nmap python3-pip 2>&1 | while IFS= read -r line; do LOG "  $line"; done
-        LOG ""
-        LOG "Installing Python packages via pip..."
-        pip3 install python-nmap paramiko pysmb pymysql getmac 2>&1 | while IFS= read -r line; do LOG "  $line"; done
+        opkg install nmap 2>&1 | while IFS= read -r line; do LOG "  $line"; done
         LOG ""
         LOG "green" "Dependencies installed!"
         sleep 1
