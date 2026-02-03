@@ -10,9 +10,11 @@ PAYLOAD_DIR="/root/payloads/user/reconnaissance/pager_bjorn"
 #
 # Setup paths for Python and shared library
 # Python packages are bundled in lib/ directory
+# MMC paths needed when python3 installed with opkg -d mmc
 #
+export PATH="/mmc/usr/bin:$PATH"
 export PYTHONPATH="$PAYLOAD_DIR/lib:$PAYLOAD_DIR:$PYTHONPATH"
-export LD_LIBRARY_PATH="$PAYLOAD_DIR/lib:$PAYLOAD_DIR:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="/mmc/usr/lib:$PAYLOAD_DIR/lib:$PAYLOAD_DIR:$LD_LIBRARY_PATH"
 export CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1
 
 #
