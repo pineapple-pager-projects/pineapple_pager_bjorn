@@ -13,6 +13,7 @@ PAYLOAD_DIR="/root/payloads/user/reconnaissance/pager_bjorn"
 #
 export PYTHONPATH="$PAYLOAD_DIR/lib:$PAYLOAD_DIR:$PYTHONPATH"
 export LD_LIBRARY_PATH="$PAYLOAD_DIR:$LD_LIBRARY_PATH"
+export CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1
 
 #
 # Check for Python3 + required modules
