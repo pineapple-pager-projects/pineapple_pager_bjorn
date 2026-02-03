@@ -123,52 +123,39 @@ check_network() {
         LOG ""
         LOG "Multiple networks detected:"
         LOG ""
-        for i in "${!INTERFACES[@]}"; do
-            NUM=$((i + 1))
-            LOG "  $NUM) ${INTERFACES[$i]} - ${IPS[$i]}"
-        done
-        LOG ""
-        LOG "Use UP/DOWN to select, GREEN to confirm"
+        LOG "red" "RED   = ${INTERFACES[0]} (${IPS[0]})"
+        LOG "green" "GREEN = ${INTERFACES[1]} (${IPS[1]})"
+        if [ "$NUM_IFACES" -ge 3 ]; then
+            LOG "UP    = ${INTERFACES[2]} (${IPS[2]})"
+        fi
         LOG ""
 
-        SELECTION=0
-        while true; do
-            # Highlight current selection
-            for i in "${!INTERFACES[@]}"; do
-                if [ "$i" -eq "$SELECTION" ]; then
-                    LOG "green" "> ${INTERFACES[$i]} - ${IPS[$i]}"
+        BUTTON=$(WAIT_FOR_INPUT 2>/dev/null)
+        case "$BUTTON" in
+            "RED"|"B")
+                SELECTED_INTERFACE="${INTERFACES[0]}"
+                SELECTED_IP="${IPS[0]}"
+                ;;
+            "GREEN"|"A")
+                SELECTED_INTERFACE="${INTERFACES[1]}"
+                SELECTED_IP="${IPS[1]}"
+                ;;
+            "UP")
+                if [ "$NUM_IFACES" -ge 3 ]; then
+                    SELECTED_INTERFACE="${INTERFACES[2]}"
+                    SELECTED_IP="${IPS[2]}"
                 else
-                    LOG "  ${INTERFACES[$i]} - ${IPS[$i]}"
+                    SELECTED_INTERFACE="${INTERFACES[0]}"
+                    SELECTED_IP="${IPS[0]}"
                 fi
-            done
-
-            BUTTON=$(WAIT_FOR_INPUT 2>/dev/null)
-            case "$BUTTON" in
-                "UP")
-                    SELECTION=$((SELECTION - 1))
-                    if [ "$SELECTION" -lt 0 ]; then
-                        SELECTION=$((NUM_IFACES - 1))
-                    fi
-                    ;;
-                "DOWN")
-                    SELECTION=$((SELECTION + 1))
-                    if [ "$SELECTION" -ge "$NUM_IFACES" ]; then
-                        SELECTION=0
-                    fi
-                    ;;
-                "GREEN"|"A")
-                    SELECTED_INTERFACE="${INTERFACES[$SELECTION]}"
-                    SELECTED_IP="${IPS[$SELECTION]}"
-                    LOG ""
-                    LOG "green" "Selected: $SELECTED_INTERFACE ($SELECTED_IP)"
-                    break
-                    ;;
-                "RED"|"B")
-                    LOG "Exiting."
-                    exit 0
-                    ;;
-            esac
-        done
+                ;;
+            *)
+                SELECTED_INTERFACE="${INTERFACES[0]}"
+                SELECTED_IP="${IPS[0]}"
+                ;;
+        esac
+        LOG ""
+        LOG "green" "Selected: $SELECTED_INTERFACE ($SELECTED_IP)"
     fi
 }
 
