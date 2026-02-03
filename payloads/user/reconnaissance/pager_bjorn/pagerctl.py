@@ -17,16 +17,46 @@ Example:
 """
 
 import os
-from ctypes import CDLL, c_int, c_uint8, c_uint16, c_uint32, c_float, c_char, c_char_p, c_void_p, POINTER, byref
+from ctypes import CDLL, Structure, c_int, c_uint8, c_uint16, c_uint32, c_float, c_char, c_char_p, c_void_p, POINTER, byref
 
-# Find the shared library - self-contained in payload directory
-_script_dir = os.path.dirname(os.path.abspath(__file__))
-_lib_path = os.path.join(_script_dir, "libpagerctl.so")
 
-if not os.path.exists(_lib_path):
-    raise OSError(f"Could not find libpagerctl.so at {_lib_path}")
+class PagerInput(Structure):
+    """Input state structure matching pager_input_t in C."""
+    _fields_ = [
+        ("current", c_uint8),   # Currently held buttons (bitmask)
+        ("pressed", c_uint8),   # Just pressed this frame (bitmask)
+        ("released", c_uint8),  # Just released this frame (bitmask)
+    ]
 
-_lib = CDLL(_lib_path)
+
+class PagerInputEvent(Structure):
+    """Input event structure for thread-safe event queue."""
+    _fields_ = [
+        ("button", c_uint8),     # Which button (single bit from PBTN_* bitmask)
+        ("type", c_int),         # Event type (PAGER_EVENT_*)
+        ("timestamp", c_uint32), # When event occurred (ms since init)
+    ]
+
+
+# Event types for PagerInputEvent
+PAGER_EVENT_NONE = 0
+PAGER_EVENT_PRESS = 1
+PAGER_EVENT_RELEASE = 2
+
+# Find the shared library (portable - looks relative to this file first)
+_lib_paths = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "libpagerctl.so"),
+    "./libpagerctl.so",
+]
+
+_lib = None
+for path in _lib_paths:
+    if os.path.exists(path):
+        _lib = CDLL(path)
+        break
+
+if _lib is None:
+    raise OSError("Could not find libpagerctl.so - build with: make remote-build")
 
 
 class Pager:
@@ -64,6 +94,11 @@ class Pager:
     BTN_A = 0x10     # Green
     BTN_B = 0x20     # Red
     BTN_POWER = 0x40 # Power button
+
+    # Input event types (for get_input_event)
+    EVENT_NONE = 0
+    EVENT_PRESS = 1
+    EVENT_RELEASE = 2
 
     # RTTTL playback modes
     RTTTL_SOUND_ONLY = 0     # Sound only (default)
@@ -193,9 +228,29 @@ class Pager:
         _lib.pager_seed_random.argtypes = [c_uint32]
         _lib.pager_seed_random.restype = None
 
-        # Input (blocking wait)
+        # Input
         _lib.pager_wait_button.argtypes = []
         _lib.pager_wait_button.restype = c_int
+        _lib.pager_poll_input.argtypes = [POINTER(PagerInput)]
+        _lib.pager_poll_input.restype = None
+
+        # Thread-safe input event queue
+        _lib.pager_get_input_event.argtypes = [POINTER(PagerInputEvent)]
+        _lib.pager_get_input_event.restype = c_int
+        _lib.pager_has_input_events.argtypes = []
+        _lib.pager_has_input_events.restype = c_int
+        _lib.pager_peek_buttons.argtypes = []
+        _lib.pager_peek_buttons.restype = c_uint8
+        _lib.pager_clear_input_events.argtypes = []
+        _lib.pager_clear_input_events.restype = None
+
+        # Backlight / Brightness
+        _lib.pager_set_brightness.argtypes = [c_int]
+        _lib.pager_set_brightness.restype = c_int
+        _lib.pager_get_brightness.argtypes = []
+        _lib.pager_get_brightness.restype = c_int
+        _lib.pager_get_max_brightness.argtypes = []
+        _lib.pager_get_max_brightness.restype = c_int
 
         # Image support
         _lib.pager_load_image.argtypes = [c_char_p]
@@ -419,11 +474,105 @@ class Pager:
         """Seed the random number generator."""
         _lib.pager_seed_random(seed)
 
-    # Input (simple blocking read for now)
-    # Full input handling requires the pager_input_t struct
+    # Input
     def wait_button(self):
         """Wait for any button press (blocking)."""
         return _lib.pager_wait_button()
+
+    def poll_input(self):
+        """Poll input state (non-blocking).
+
+        Returns:
+            tuple: (current, pressed, released) where each is a button bitmask.
+                - current: buttons currently held down
+                - pressed: buttons just pressed this frame
+                - released: buttons just released this frame
+
+        Example:
+            current, pressed, released = p.poll_input()
+            if pressed & Pager.BTN_A:
+                print("A button just pressed!")
+            if current & Pager.BTN_UP:
+                print("UP is being held")
+        """
+        state = PagerInput()
+        _lib.pager_poll_input(byref(state))
+        return state.current, state.pressed, state.released
+
+    # Thread-safe input event queue methods
+    def get_input_event(self):
+        """Get next input event from thread-safe queue.
+
+        This is the preferred method for multi-threaded applications.
+        Each event is only returned once, regardless of which thread reads it.
+
+        Returns:
+            tuple: (button, event_type, timestamp) or None if queue is empty.
+                - button: which button (single bit from BTN_* constants)
+                - event_type: PAGER_EVENT_PRESS (1) or PAGER_EVENT_RELEASE (2)
+                - timestamp: when event occurred (ms since init)
+
+        Example:
+            event = pager.get_input_event()
+            if event:
+                button, event_type, timestamp = event
+                if button == Pager.BTN_B and event_type == PAGER_EVENT_PRESS:
+                    show_pause_menu()
+        """
+        event = PagerInputEvent()
+        if _lib.pager_get_input_event(byref(event)):
+            return (event.button, event.type, event.timestamp)
+        return None
+
+    def has_input_events(self):
+        """Check if there are pending input events in the queue.
+
+        Returns:
+            bool: True if events are waiting, False otherwise.
+        """
+        return bool(_lib.pager_has_input_events())
+
+    def peek_buttons(self):
+        """Get current button state without consuming events.
+
+        Thread-safe way to check which buttons are currently held.
+        Does not affect the event queue.
+
+        Returns:
+            int: Bitmask of currently held buttons.
+
+        Example:
+            if pager.peek_buttons() & Pager.BTN_UP:
+                print("UP is being held")
+        """
+        return _lib.pager_peek_buttons()
+
+    def clear_input_events(self):
+        """Clear all pending input events from the queue.
+
+        Use this when transitioning between screens or game states
+        to prevent stale events from triggering actions.
+        """
+        _lib.pager_clear_input_events()
+
+    # Backlight / Brightness
+    def set_brightness(self, percent):
+        """Set screen brightness as percentage (0-100).
+        Returns 0 on success, -1 if backlight control not available.
+        """
+        return _lib.pager_set_brightness(percent)
+
+    def get_brightness(self):
+        """Get current screen brightness as percentage (0-100).
+        Returns -1 if backlight control not available.
+        """
+        return _lib.pager_get_brightness()
+
+    def get_max_brightness(self):
+        """Get maximum brightness value from hardware.
+        Returns -1 if backlight control not available.
+        """
+        return _lib.pager_get_max_brightness()
 
     # Image support (JPG, PNG, BMP, GIF)
     def load_image(self, filepath):
@@ -478,7 +627,7 @@ if __name__ == "__main__":
     with Pager() as p:
         p.set_rotation(270)
         p.clear(p.rgb(0, 0, 32))
-        p.draw_text_centered(100, "libpager.so", p.WHITE, 2)
+        p.draw_text_centered(100, "libpagerctl.so", p.WHITE, 2)
         p.draw_text_centered(130, "Python Demo", p.CYAN, 1)
         p.flip()
         p.beep(800, 100)
