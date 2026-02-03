@@ -2,6 +2,8 @@
 
 A port of [Bjorn](https://github.com/infinition/Bjorn) - the autonomous network reconnaissance Tamagotchi - for the WiFi Pineapple Pager.
 
+![Bjorn on Pager](screenshot.png)
+
 ## What is Bjorn?
 
 Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It automatically:
