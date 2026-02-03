@@ -2,8 +2,6 @@
 
 A port of [Bjorn](https://github.com/infinition/Bjorn) - the autonomous network reconnaissance Tamagotchi - for the WiFi Pineapple Pager.
 
-![Bjorn](https://github.com/infinition/Bjorn/raw/main/resources/images/Bjorn.png)
-
 ## What is Bjorn?
 
 Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It automatically:
@@ -17,26 +15,25 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 
 | Feature | Status |
 |---------|--------|
-| Network Scanner | ✅ Working |
-| Nmap Vuln Scanner | ✅ Working |
-| FTP Brute Force | ✅ Working |
-| SSH Brute Force | ✅ Working |
-| Telnet Brute Force | ✅ Working |
-| SMB Brute Force | ✅ Working |
-| RDP Brute Force | ✅ Working |
-| MySQL Brute Force | ✅ Working |
-| File Exfiltration | ✅ Working |
-| Portrait Display | ✅ Working |
-| Button Controls | ✅ Working |
+| Network Scanner | Working |
+| Nmap Vuln Scanner | Working |
+| FTP Brute Force | Working |
+| SSH Brute Force | Working |
+| Telnet Brute Force | Working |
+| SMB Brute Force | Working |
+| RDP Brute Force | Working |
+| MySQL Brute Force | Working |
+| File Exfiltration | Working |
+| Portrait Display | Working |
+| Button Controls | Working |
 
-## Installation
-
-### Prerequisites
+## Requirements
 
 - WiFi Pineapple Pager with firmware 1.x+
-- Internet connection (for initial dependency install)
+- **Network connection** - Pager must be connected to a network to scan (WiFi client mode or Ethernet/USB)
+- Internet connection (for initial dependency install only)
 
-### Install
+## Installation
 
 1. Copy the `payloads/` directory to your Pager's SD card:
    ```bash
@@ -45,11 +42,22 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 
 2. Launch from the Pager's payload menu: **Reconnaissance → Bjorn**
 
-3. On first run, press **GREEN** to install dependencies (Python packages)
+3. Dependencies (nmap, paramiko, etc.) are **automatically installed** on first run
 
-4. Press **GREEN** again to start Bjorn
+4. Press **GREEN** to start Bjorn
 
 ## Usage
+
+### Startup
+
+When launching Bjorn:
+1. Dependencies are checked and installed automatically
+2. Network connectivity is verified
+3. If multiple networks are detected, select one:
+   - **RED** = 1st network
+   - **GREEN** = 2nd network
+   - **UP** = 3rd network
+4. Press **GREEN** to start scanning
 
 ### Controls
 
@@ -57,7 +65,6 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 |--------|--------|
 | **GREEN** | Start Bjorn / Confirm |
 | **RED** | Exit / Cancel |
-| **UP** | Check dependencies |
 
 ### Exiting Bjorn
 
