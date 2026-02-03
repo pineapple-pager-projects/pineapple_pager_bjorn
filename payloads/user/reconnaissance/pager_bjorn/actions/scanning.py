@@ -376,11 +376,16 @@ class NetworkScanner:
                     self.outer_instance.logger.error(f"Error in scan_network_and_write_to_csv (initial write): {e}")
 
             self.outer_instance.nm.scan(hosts=str(self.network), arguments='-sn')
+            threads = []
             for host in self.outer_instance.nm.all_hosts():
                 t = threading.Thread(target=self.scan_host, args=(host,))
                 t.start()
+                threads.append(t)
 
-            time.sleep(5)
+            # Wait for all host scan threads to complete (MAC lookups can be slow)
+            for t in threads:
+                t.join(timeout=30)  # 30 sec max per thread
+
             self.outer_instance.sort_and_write_csv(self.csv_scan_file)
 
         def scan_host(self, ip):
@@ -405,7 +410,7 @@ class NetworkScanner:
 
         def start(self):
             self.scan_network_and_write_to_csv()
-            time.sleep(7)
+            # Threads are now joined in scan_network_and_write_to_csv, no need for sleep
             self.ip_data = self.outer_instance.GetIpFromCsv(self.outer_instance, self.csv_scan_file)
             self.open_ports = {ip: [] for ip in self.ip_data.ip_list}
 
