@@ -20,13 +20,13 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 | FTP Brute Force | Ported | ftplib (built-in) |
 | SSH Brute Force | Ported | paramiko (bundled) |
 | Telnet Brute Force | Ported | telnetlib (built-in) |
-| SMB Brute Force | TODO | Needs `smbclient` binary |
-| RDP Brute Force | TODO | Needs `xfreerdp` binary |
+| SMB Brute Force | Ported | pysmb (bundled) |
+| RDP Brute Force | N/A | Needs `xfreerdp` binary (not available on Pager) |
 | MySQL Brute Force | Ported | pymysql (bundled) |
 | File Exfiltration (FTP) | Ported | |
 | File Exfiltration (SSH) | Ported | paramiko (bundled) |
-| File Exfiltration (SMB) | TODO | Needs `smbclient` binary |
-| File Exfiltration (RDP) | TODO | Needs `xfreerdp` binary |
+| File Exfiltration (SMB) | Ported | pysmb (bundled) |
+| File Exfiltration (RDP) | N/A | Needs `xfreerdp` binary (not available on Pager) |
 | Portrait Display | Ported | |
 | Button Controls | Ported | |
 
