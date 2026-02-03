@@ -19,21 +19,14 @@ Example:
 import os
 from ctypes import CDLL, c_int, c_uint8, c_uint16, c_uint32, c_float, c_char, c_char_p, c_void_p, POINTER, byref
 
-# Find the shared library
-_lib_paths = [
-    "/root/payloads/user/examples/PAGERCTL/libpagerctl.so",
-    os.path.join(os.path.dirname(__file__), "libpagerctl.so"),
-    "./libpagerctl.so",
-]
+# Find the shared library - self-contained in payload directory
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_lib_path = os.path.join(_script_dir, "libpagerctl.so")
 
-_lib = None
-for path in _lib_paths:
-    if os.path.exists(path):
-        _lib = CDLL(path)
-        break
+if not os.path.exists(_lib_path):
+    raise OSError(f"Could not find libpagerctl.so at {_lib_path}")
 
-if _lib is None:
-    raise OSError("Could not find libpagerctl.so - build with: make remote-build")
+_lib = CDLL(_lib_path)
 
 
 class Pager:
