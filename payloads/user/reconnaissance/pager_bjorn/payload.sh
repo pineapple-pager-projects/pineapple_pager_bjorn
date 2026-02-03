@@ -124,33 +124,24 @@ check_network() {
         LOG ""
         LOG "Multiple networks detected:"
         LOG ""
-        LOG "LEFT  = ${INTERFACES[0]} (${IPS[0]})"
-        if [ "$NUM_IFACES" -ge 2 ]; then
-            LOG "UP    = ${INTERFACES[1]} (${IPS[1]})"
-        fi
+        LOG "red" "RED   = ${INTERFACES[0]} (${IPS[0]})"
+        LOG "green" "GREEN = ${INTERFACES[1]} (${IPS[1]})"
         if [ "$NUM_IFACES" -ge 3 ]; then
-            LOG "RIGHT = ${INTERFACES[2]} (${IPS[2]})"
+            LOG "UP    = ${INTERFACES[2]} (${IPS[2]})"
         fi
-        LOG ""
-        LOG "red" "RED   = Exit"
         LOG ""
 
         BUTTON=$(WAIT_FOR_INPUT 2>/dev/null)
         case "$BUTTON" in
-            "LEFT")
+            "RED"|"B")
                 SELECTED_INTERFACE="${INTERFACES[0]}"
                 SELECTED_IP="${IPS[0]}"
                 ;;
-            "UP")
-                if [ "$NUM_IFACES" -ge 2 ]; then
-                    SELECTED_INTERFACE="${INTERFACES[1]}"
-                    SELECTED_IP="${IPS[1]}"
-                else
-                    SELECTED_INTERFACE="${INTERFACES[0]}"
-                    SELECTED_IP="${IPS[0]}"
-                fi
+            "GREEN"|"A")
+                SELECTED_INTERFACE="${INTERFACES[1]}"
+                SELECTED_IP="${IPS[1]}"
                 ;;
-            "RIGHT")
+            "UP")
                 if [ "$NUM_IFACES" -ge 3 ]; then
                     SELECTED_INTERFACE="${INTERFACES[2]}"
                     SELECTED_IP="${IPS[2]}"
@@ -158,10 +149,6 @@ check_network() {
                     SELECTED_INTERFACE="${INTERFACES[0]}"
                     SELECTED_IP="${IPS[0]}"
                 fi
-                ;;
-            "RED"|"B")
-                LOG "Exiting."
-                exit 0
                 ;;
             *)
                 SELECTED_INTERFACE="${INTERFACES[0]}"

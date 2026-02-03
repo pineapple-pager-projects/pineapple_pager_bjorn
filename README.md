@@ -58,11 +58,10 @@ When launching Bjorn:
 1. Dependencies are checked automatically
 2. Network connectivity is verified
 3. If multiple networks are detected, select one:
-   - **LEFT** = 1st network
-   - **UP** = 2nd network
-   - **RIGHT** = 3rd network
-   - **RED** = Exit
-4. Press **GREEN** to start scanning
+   - **RED** = 1st network
+   - **GREEN** = 2nd network
+   - **UP** = 3rd network
+4. Press **GREEN** to start, **RED** to exit
 
 ### Controls
 
