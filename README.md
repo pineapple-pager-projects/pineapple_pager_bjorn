@@ -15,17 +15,19 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 
 | Feature | Status |
 |---------|--------|
-| Network Scanner | Working |
-| Nmap Vuln Scanner | Working |
-| FTP Brute Force | Working |
-| SSH Brute Force | Working |
-| Telnet Brute Force | Working |
-| SMB Brute Force | Working |
-| RDP Brute Force | Working |
-| MySQL Brute Force | Working |
-| File Exfiltration | Working |
-| Portrait Display | Working |
-| Button Controls | Working |
+| Network Scanner | Ported |
+| Nmap Vuln Scanner | Ported |
+| FTP Brute Force | Ported |
+| SSH Brute Force | Ported |
+| Telnet Brute Force | Ported |
+| SMB Brute Force | Ported |
+| RDP Brute Force | Ported |
+| MySQL Brute Force | Ported |
+| File Exfiltration | Ported |
+| Portrait Display | Ported |
+| Button Controls | Ported |
+
+*Note: Features are ported from the original Bjorn project. Testing on actual hardware is ongoing.*
 
 ## Requirements
 
