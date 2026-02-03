@@ -92,8 +92,17 @@ class RDPConnector:
     def rdp_connect(self, adresse_ip, user, password):
         """
         Attempt to connect to an RDP service using the given credentials.
+        Uses bundled xfreerdp (sfreerdp) in bin/ directory with +auth-only flag.
         """
-        command = f"xfreerdp /v:{adresse_ip} /u:{user} /p:{password} /cert:ignore +auth-only"
+        # Get path to bundled xfreerdp binary
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        xfreerdp_path = os.path.join(script_dir, "bin", "xfreerdp")
+
+        # Fall back to system xfreerdp if bundled not found
+        if not os.path.exists(xfreerdp_path):
+            xfreerdp_path = "xfreerdp"
+
+        command = f"{xfreerdp_path} /v:{adresse_ip} /u:{user} /p:{password} /cert:ignore +auth-only"
         try:
             process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = process.communicate()

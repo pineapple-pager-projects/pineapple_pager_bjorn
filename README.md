@@ -21,12 +21,12 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 | SSH Brute Force | Ported | paramiko (bundled) |
 | Telnet Brute Force | Ported | telnetlib (built-in) |
 | SMB Brute Force | Ported | pysmb (bundled) |
-| RDP Brute Force | N/A | Needs `xfreerdp` binary (not available on Pager) |
+| RDP Brute Force | Ported | sfreerdp (bundled, cross-compiled for MIPS) |
 | MySQL Brute Force | Ported | pymysql (bundled) |
 | File Exfiltration (FTP) | Ported | |
 | File Exfiltration (SSH) | Ported | paramiko (bundled) |
 | File Exfiltration (SMB) | Ported | pysmb (bundled) |
-| File Exfiltration (RDP) | N/A | Needs `xfreerdp` binary (not available on Pager) |
+| File Exfiltration (RDP) | Disabled | Requires full xfreerdp with drive channels |
 | Portrait Display | Ported | |
 | Button Controls | Ported | |
 
@@ -115,6 +115,10 @@ pager_bjorn/
 ├── pagerctl.py        # Pager hardware interface
 ├── libpagerctl.so     # Native display library
 ├── payload.sh         # Launcher script
+├── bin/               # Native binaries (MIPS)
+│   ├── sfreerdp       # FreeRDP client (auth-only)
+│   ├── libssl.so.3    # OpenSSL (sfreerdp dep)
+│   └── libcrypto.so.3 # OpenSSL (sfreerdp dep)
 ├── lib/               # Bundled Python packages
 │   ├── paramiko/      # SSH library
 │   ├── cryptography/  # Crypto (paramiko dep)
