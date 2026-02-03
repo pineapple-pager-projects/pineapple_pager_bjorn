@@ -13,6 +13,28 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 - **Exfiltrates data** when credentials are found
 - **Displays status** with cute Viking animations
 
+## Display Icons
+
+### Stats Grid (top-right)
+
+| Position | Icon | Name | Description |
+|----------|------|------|-------------|
+| Row 1, Left | Target | `target` | Alive hosts found |
+| Row 1, Middle | Folder | `port` | Open ports discovered |
+| Row 1, Right | Stack | `vuln` | Vulnerabilities found |
+| Row 2, Left | Lock | `cred` | Credentials cracked |
+| Row 2, Middle | Skull | `zombie` | Compromised hosts |
+| Row 2, Right | File | `data` | Data files stolen |
+
+### Viking Stats (around character)
+
+| Position | Icon | Name | Description |
+|----------|------|------|-------------|
+| Top-left | Coins | `coins` | Total score |
+| Bottom-left | Up arrow | `level` | Bjorn's level |
+| Top-right | Network | `networkkb` | Known hosts discovered |
+| Bottom-right | Swords | `attacks` | Attacks performed |
+
 ## Features
 
 | Feature | Status | Notes |
