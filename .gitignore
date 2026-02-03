@@ -7,8 +7,12 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
+
+# Ignore .so files except bundled ones
+*.so
+!payloads/user/reconnaissance/pager_bjorn/libpagerctl.so
+!payloads/user/reconnaissance/pager_bjorn/bin/*.so*
 *.egg-info/
 .eggs/
 dist/
