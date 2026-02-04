@@ -1,3 +1,5 @@
+WARNING still a work in Progress, this is not ready and fully working yet. SOON!
+
 # Pager Bjorn
 
 A port of [Bjorn](https://github.com/infinition/Bjorn) - the autonomous network reconnaissance Tamagotchi - for the WiFi Pineapple Pager.
