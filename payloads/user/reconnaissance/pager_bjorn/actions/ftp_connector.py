@@ -179,6 +179,7 @@ class FTPConnector:
                     # File I/O outside lock
                     self.save_results()
                     self.removeduplicates()
+                    self.shared_data.record_zombie(mac_address, adresse_ip)
             finally:
                 self.queue.task_done()
                 with self.progress_lock:
@@ -207,6 +208,7 @@ class FTPConnector:
                 self.results.append([mac_address, adresse_ip, hostname, anon_user or "anonymous", "", port])
             self.save_results()
             self.removeduplicates()
+            self.shared_data.record_zombie(mac_address, adresse_ip)
             return True, self.results
 
         total_tasks = len(self.users) * len(self.passwords)
