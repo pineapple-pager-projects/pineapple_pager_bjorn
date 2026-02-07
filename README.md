@@ -146,7 +146,7 @@ Customize brute force wordlists in `resources/dictionary/`:
 |----------|------|------|-------------|
 | Row 1, Left | Target | `target` | Alive hosts found |
 | Row 1, Middle | Folder | `port` | Open ports discovered |
-| Row 1, Right | Stack | `vuln` | Vulnerabilities found |
+| Row 1, Right | Stack | `vuln` | Vulnerabilities found (TODO - not yet implemented) |
 | Row 2, Left | Lock | `cred` | Credentials cracked |
 | Row 2, Middle | Skull | `zombie` | Compromised hosts |
 | Row 2, Right | File | `data` | Data files stolen |
@@ -334,6 +334,14 @@ docker-compose logs [service-name]
 
 ### MySQL connection refused
 Wait 30-60 seconds after `docker-compose up` for MySQL to initialize.
+
+---
+
+## TODO / Roadmap
+
+Features planned but not yet implemented:
+
+- **Vulnerability Scanner** - Nmap vuln script integration exists but is disabled. Requires web UI integration, loot page, display counter, and extensive testing before enabling.
 
 ---
 
