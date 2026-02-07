@@ -8,3 +8,4 @@ anonymous
 Administrator
 pi
 ubuntu
+kali

@@ -21,7 +21,7 @@ import logging
 import subprocess
 from logger import Logger
 
-logger = Logger(name="shared.py", level=logging.DEBUG)
+logger = Logger(name="shared.py", level=logging.INFO)
 
 class SharedData:
     """Shared data between the different modules."""
@@ -56,6 +56,9 @@ class SharedData:
         self.output_dir = os.path.join(self.datadir, 'output')
         self.input_dir = os.path.join(self.datadir, 'input')
 
+        # Control file for inter-process communication (webapp <-> Bjorn)
+        self.orchestrator_control_file = os.path.join(self.datadir, '.orchestrator_control')
+
         # Create data directories if they don't exist
         for d in [self.datadir, self.logsdir, self.output_dir, self.input_dir]:
             os.makedirs(d, exist_ok=True)
@@ -89,9 +92,8 @@ class SharedData:
         self.backupdir = os.path.join(self.backupbasedir, 'backups')
         self.upload_dir = os.path.join(self.backupbasedir, 'uploads')
 
-        # Web directory (not used on Pager)
-        self.webdir = os.path.join(self.datadir, 'web')
-        os.makedirs(self.webdir, exist_ok=True)
+        # Web directory (static files in payload folder)
+        self.webdir = os.path.join(self.currentdir, 'web')
 
         # Files
         self.shared_config_json = os.path.join(self.configdir, 'shared_config.json')
@@ -140,13 +142,9 @@ class SharedData:
             "image_display_delaymax": 8,
             "scan_interval": 300,          # 5 min scans (battery friendly)
             "scan_vuln_interval": 900,     # 15 min vuln scans
+            "clear_hosts_on_startup": False, # Only clear hosts via Clear Hosts button
             "failed_retry_delay": 600,
             "success_retry_delay": 900,
-
-            # Pager display settings
-            "ref_width": 480,              # Pager LCD width
-            "ref_height": 222,             # Pager LCD height
-            "display_type": "pager",       # Pager display type
 
             "__title_lists__": "List Settings",
             "portlist": [20, 21, 22, 23, 25, 53, 69, 80, 110, 111, 135, 137, 139, 143, 161, 162, 389, 443, 445, 512, 513, 514, 587, 636, 993, 995, 1080, 1433, 1521, 2049, 3306, 3389, 5000, 5001, 5432, 5900, 8080, 8443, 9090, 10000],
@@ -167,10 +165,18 @@ class SharedData:
             "timewait_ftp": 0,
             "timewait_sql": 0,
             "timewait_rdp": 0,
+
+            "__title_stealing__": "File Stealing Settings",
+            "steal_max_depth": 3,   # Max directory depth when enumerating files
+            "steal_max_files": 500, # Max files to enumerate per share
+
+            "__title_performance__": "Performance Settings",
+            "worker_threads": 5,  # Number of concurrent worker threads for brute force (reduce for low-memory devices)
         }
 
     def update_mac_blacklist(self):
-        """Update the MAC blacklist without immediate save."""
+        """Update the MAC and IP blacklists with this device's addresses."""
+        # Update MAC blacklist
         mac_address = self.get_device_mac()
         if mac_address:
             if 'mac_scan_blacklist' not in self.config:
@@ -183,6 +189,17 @@ class SharedData:
                 logger.info(f"Local MAC address {mac_address} already in blacklist")
         else:
             logger.warning("Could not add local MAC to blacklist: MAC address not found")
+
+        # Update IP blacklist (important for self-detection since ARP doesn't work on self)
+        device_ips = self.get_device_ips()
+        if device_ips:
+            if 'ip_scan_blacklist' not in self.config:
+                self.config['ip_scan_blacklist'] = []
+
+            for ip in device_ips:
+                if ip not in self.config['ip_scan_blacklist']:
+                    self.config['ip_scan_blacklist'].append(ip)
+                    logger.info(f"Added local IP address {ip} to blacklist")
 
     def get_device_mac(self):
         """Get the MAC address of the primary network interface."""
@@ -201,6 +218,27 @@ class SharedData:
             logger.error(f"Error getting device MAC address: {e}")
             return None
 
+    def get_device_ips(self):
+        """Get all IP addresses of this device."""
+        ips = []
+        try:
+            # Use ip addr to get all IPs
+            result = subprocess.run(['ip', '-4', 'addr', 'show'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                import re
+                # Match inet X.X.X.X
+                for match in re.finditer(r'inet (\d+\.\d+\.\d+\.\d+)', result.stdout):
+                    ip = match.group(1)
+                    # Skip localhost
+                    if not ip.startswith('127.'):
+                        ips.append(ip)
+            if ips:
+                logger.debug(f"Found device IPs: {ips}")
+            return ips
+        except Exception as e:
+            logger.error(f"Error getting device IPs: {e}")
+            return []
+
     def setup_environment(self):
         """Setup the environment with the necessary directories and files."""
         self.save_config()
@@ -213,12 +251,12 @@ class SharedData:
         """Initialize display settings for Pager LCD."""
         try:
             logger.info("Initializing Pager display settings...")
-            # Pager LCD is 480x222 RGB565
-            self.width = self.config.get("ref_width", 480)
-            self.height = self.config.get("ref_height", 222)
+            # Default values - display.py will override with actual hardware dimensions
+            self.width = 222
+            self.height = 480
             self.screen_reversed = False
             self.web_screen_reversed = False
-            logger.info(f"Pager display initialized: {self.width}x{self.height}")
+            logger.debug(f"Display defaults set: {self.width}x{self.height}")
         except Exception as e:
             logger.error(f"Error initializing display settings: {e}")
             raise
@@ -227,7 +265,7 @@ class SharedData:
         """Initialize the variables."""
         self.should_exit = False
         self.display_should_exit = False
-        self.orchestrator_should_exit = False
+        self._orchestrator_should_exit = False  # Local cache, use property for IPC
         self.webapp_should_exit = False
         self.bjorn_instance = None
         self.wifichanged = False
@@ -264,6 +302,30 @@ class SharedData:
         # Current image for animation
         self.imagegen = None
         self.current_image_path = None
+
+    @property
+    def orchestrator_should_exit(self):
+        """Read orchestrator exit flag from control file (for IPC between webapp and Bjorn)."""
+        try:
+            if os.path.exists(self.orchestrator_control_file):
+                with open(self.orchestrator_control_file, 'r') as f:
+                    content = f.read().strip()
+                    return content == 'stop'
+            return False  # Default: orchestrator should run
+        except Exception:
+            return self._orchestrator_should_exit  # Fallback to local cache
+
+    @orchestrator_should_exit.setter
+    def orchestrator_should_exit(self, value):
+        """Write orchestrator exit flag to control file (for IPC between webapp and Bjorn)."""
+        self._orchestrator_should_exit = value
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(self.orchestrator_control_file), exist_ok=True)
+            with open(self.orchestrator_control_file, 'w') as f:
+                f.write('stop' if value else 'run')
+        except Exception as e:
+            logger.error(f"Error writing orchestrator control file: {e}")
 
     def delete_webconsolelog(self):
         """Delete the web console log file."""
@@ -335,26 +397,25 @@ class SharedData:
             logger.error(f"Unexpected error in generate_actions_json: {e}")
 
     def initialize_csv(self):
-        """Initialize the network knowledge base CSV file with headers."""
-        logger.info("Initializing the network knowledge base CSV file with headers")
+        """Initialize the network knowledge base CSV file with headers if it doesn't exist."""
         try:
+            # Get action names for headers
+            action_names = []
+            try:
+                with open(self.actions_file, 'r') as file:
+                    actions = json.load(file)
+                action_names = [action["b_class"] for action in actions if "b_class" in action]
+            except FileNotFoundError as e:
+                logger.error(f"Actions file not found: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding JSON from actions file: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error reading actions file: {e}")
+
+            headers = ["MAC Address", "IPs", "Hostnames", "Alive", "Ports"] + action_names
+
+            # Only create the file if it doesn't exist - never auto-clear
             if not os.path.exists(self.netkbfile):
-                try:
-                    with open(self.actions_file, 'r') as file:
-                        actions = json.load(file)
-                    action_names = [action["b_class"] for action in actions if "b_class" in action]
-                except FileNotFoundError as e:
-                    logger.error(f"Actions file not found: {e}")
-                    return
-                except json.JSONDecodeError as e:
-                    logger.error(f"Error decoding JSON from actions file: {e}")
-                    return
-                except Exception as e:
-                    logger.error(f"Unexpected error reading actions file: {e}")
-                    return
-
-                headers = ["MAC Address", "IPs", "Hostnames", "Alive", "Ports"] + action_names
-
                 try:
                     with open(self.netkbfile, 'w', newline='') as file:
                         writer = csv.writer(file)
@@ -365,7 +426,7 @@ class SharedData:
                 except Exception as e:
                     logger.error(f"Unexpected error while writing to netkbfile: {e}")
             else:
-                logger.info(f"Network knowledge base CSV file already exists at {self.netkbfile}")
+                logger.debug(f"Network knowledge base CSV file already exists at {self.netkbfile}")
         except Exception as e:
             logger.error(f"Unexpected error in initialize_csv: {e}")
 
@@ -481,7 +542,7 @@ class SharedData:
                         if image_name.endswith('.bmp') and re.search(r'\d', image_name):
                             image_path = os.path.join(status_dir, image_name)
                             self.image_series[status].append(image_path)
-                    logger.info(f"Found {len(self.image_series[status])} animation frames for {status}")
+                    logger.debug(f"Found {len(self.image_series[status])} animation frames for {status}")
 
             # Calculate character position (center-bottom of screen)
             # Original bjorn image was about 70x90 pixels

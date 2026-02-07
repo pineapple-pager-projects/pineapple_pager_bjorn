@@ -85,7 +85,7 @@ def main():  # type: () -> None
 
     if args.debug or args.verbose:
         logging.basicConfig(
-            format="%(levelname)-8s %(message)s", level=logging.DEBUG, stream=sys.stderr
+            format="%(levelname)-8s %(message)s", level=logging.INFO, stream=sys.stderr
         )
 
     if args.debug:

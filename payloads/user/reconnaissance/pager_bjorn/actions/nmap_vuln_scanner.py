@@ -6,8 +6,9 @@ import os
 import csv
 import subprocess
 import logging
+import time
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from shared import SharedData
 from logger import Logger
 
@@ -82,12 +83,16 @@ class NmapVulnScanner:
             logger.info(f"Scanning {ip} on ports {','.join(ports)} for vulnerabilities with aggressivity {self.shared_data.nmap_scan_aggressivity}")
             result = subprocess.run(
                 ["nmap", self.shared_data.nmap_scan_aggressivity, "-sV", "--script", "vulners.nse", "-p", ",".join(ports), ip],
-                capture_output=True, text=True
+                capture_output=True, text=True,
+                timeout=300  # 5 minute timeout for nmap scan
             )
             combined_result += result.stdout
 
             vulnerabilities = self.parse_vulnerabilities(result.stdout)
             self.update_summary_file(ip, hostname, mac, ",".join(ports), vulnerabilities)
+        except subprocess.TimeoutExpired:
+            logger.lifecycle_timeout("NmapVulnScanner", "nmap scan", 300, ip)
+            success = False
         except Exception as e:
             logger.error(f"Error scanning {ip}: {e}")
             success = False  # Mark as failed if an error occurs
@@ -98,17 +103,26 @@ class NmapVulnScanner:
         """
         Executes the vulnerability scan for a given IP and row data.
         """
+        start_time = time.time()
+        logger.lifecycle_start("NmapVulnScanner", ip)
         self.shared_data.bjornorch_status = "NmapVulnScanner"
         ports = row["Ports"].split(";")
-        scan_result = self.scan_vulnerabilities(ip, row["Hostnames"], row["MAC Address"], ports)
+        try:
+            scan_result = self.scan_vulnerabilities(ip, row["Hostnames"], row["MAC Address"], ports)
 
-        if scan_result is not None:
-            self.scan_results.append((ip, row["Hostnames"], row["MAC Address"]))
-            self.save_results(row["MAC Address"], ip, scan_result)
-            return 'success'
-        else:
-            return 'success' # considering failed as success as we just need to scan vulnerabilities once
-            # return 'failed'
+            if scan_result is not None:
+                self.scan_results.append((ip, row["Hostnames"], row["MAC Address"]))
+                self.save_results(row["MAC Address"], ip, scan_result)
+                status = 'success'
+            else:
+                status = 'success'  # considering failed as success as we just need to scan vulnerabilities once
+        except Exception as e:
+            logger.error(f"Error during vulnerability scan for {ip}: {e}")
+            status = 'failed'
+        finally:
+            duration = time.time() - start_time
+            logger.lifecycle_end("NmapVulnScanner", status, duration, ip)
+        return status
 
     def parse_vulnerabilities(self, scan_result):
         """
@@ -205,12 +219,21 @@ if __name__ == "__main__":
                     ip = row["IPs"]
                     futures.append(executor.submit(nmap_vuln_scanner.execute, ip, row, b_status))
 
-            for future in as_completed(futures):
+            # Use timeout on as_completed to prevent infinite blocking
+            for future in as_completed(futures, timeout=1800):  # 30 minute total timeout
+                try:
+                    future.result(timeout=300)  # 5 minute timeout per scan
+                except FuturesTimeoutError:
+                    logger.warning("Scan timed out")
+                except Exception as e:
+                    logger.error(f"Scan error: {e}")
                 completed += 1
                 logger.info(f"Scanning vulnerabilities... {completed}/{len(futures)}")
 
         nmap_vuln_scanner.save_summary()
         logger.info(f"Total scans performed: {len(nmap_vuln_scanner.scan_results)}")
         exit(len(nmap_vuln_scanner.scan_results))
+    except FuturesTimeoutError:
+        logger.error("Overall vulnerability scanning timed out after 30 minutes")
     except Exception as e:
         logger.error(f"Error: {e}")

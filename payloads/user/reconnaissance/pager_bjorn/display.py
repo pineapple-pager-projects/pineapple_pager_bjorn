@@ -21,7 +21,7 @@ from init_shared import shared_data
 from comment import Commentaireia
 from logger import Logger
 
-logger = Logger(name="display.py", level=logging.DEBUG)
+logger = Logger(name="display.py", level=logging.INFO)
 
 
 class Display:
