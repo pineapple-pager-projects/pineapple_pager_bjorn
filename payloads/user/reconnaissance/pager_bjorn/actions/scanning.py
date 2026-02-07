@@ -14,10 +14,11 @@ from datetime import datetime
 from getmac import get_mac_address as gma
 from shared import SharedData
 from logger import Logger
+from timeout_utils import join_threads_with_timeout
 import ipaddress
 import nmap
 
-logger = Logger(name="scanning.py", level=logging.DEBUG)
+logger = Logger(name="scanning.py", level=logging.INFO)
 
 b_class = "NetworkScanner"
 b_module = "scanning"
@@ -124,7 +125,7 @@ class NetworkScanner:
         except Exception:
             return False
 
-    def update_netkb(self, netkbfile, netkb_data, alive_macs):
+    def update_netkb(self, netkbfile, netkb_data, alive_macs, scanned_network=None):
         with self.lock:
             try:
                 netkb_entries = {}
@@ -142,9 +143,12 @@ class NetworkScanner:
                             hostnames = row["Hostnames"].split(';')
                             alive = row["Alive"]
                             ports = row["Ports"].split(';')
+                            # Filter out hostnames that are just IP addresses
+                            ip_set = set(ips) if ips[0] else set()
+                            valid_hostnames = set(h for h in hostnames if h and h not in ip_set)
                             netkb_entries[mac] = {
-                                'IPs': set(ips) if ips[0] else set(),
-                                'Hostnames': set(hostnames) if hostnames[0] else set(),
+                                'IPs': ip_set,
+                                'Hostnames': valid_hostnames,
                                 'Alive': alive,
                                 'Ports': set(ports) if ports[0] else set()
                             }
@@ -152,9 +156,20 @@ class NetworkScanner:
                                 netkb_entries[mac][action] = row.get(action, "")
 
                 # Ping fallback: check existing hosts not detected by nmap
+                # Only check hosts within the scanned network range
                 for mac, data in netkb_entries.items():
                     if mac not in alive_macs and mac != "STANDALONE":
                         for ip in data['IPs']:
+                            # Skip blacklisted IPs (including this device)
+                            if self.blacklistcheck and ip in self.ip_scan_blacklist:
+                                continue
+                            # Skip IPs not in the scanned network range
+                            if scanned_network:
+                                try:
+                                    if ipaddress.IPv4Address(ip) not in scanned_network:
+                                        continue
+                                except:
+                                    continue
                             if self.ping_host(ip):
                                 self.logger.info(f"Ping fallback: {ip} ({mac}) is alive")
                                 alive_macs.add(mac)
@@ -179,13 +194,15 @@ class NetworkScanner:
                     ip_to_mac[ip] = mac
                     if mac in netkb_entries:
                         netkb_entries[mac]['IPs'].add(ip)
-                        netkb_entries[mac]['Hostnames'].add(hostname)
+                        # Only add hostname if it's not the IP address
+                        if hostname and hostname != ip:
+                            netkb_entries[mac]['Hostnames'].add(hostname)
                         netkb_entries[mac]['Alive'] = '1'
                         netkb_entries[mac]['Ports'].update(map(str, ports))
                     else:
                         netkb_entries[mac] = {
                             'IPs': {ip},
-                            'Hostnames': {hostname},
+                            'Hostnames': {hostname} if hostname and hostname != ip else set(),
                             'Alive': '1',
                             'Ports': set(map(str, ports))
                         }
@@ -225,7 +242,7 @@ class NetworkScanner:
                     self.logger.info(f"CSV: {file_path}")
                     self.logger.info(f"Headers: {', '.join(headers)}")
                     for row in reader:
-                        self.logger.debug(f"  {', '.join(row)}")
+                        self.logger.info(f"  {', '.join(row)}")
             except Exception as e:
                 self.logger.error(f"Error in display_csv: {e}")
 
@@ -292,21 +309,58 @@ class NetworkScanner:
             self.logger.error(f"Error in get_network: {e}")
             return None
 
+    def get_hostname(self, ip):
+        """Get hostname for IP using reverse DNS lookup."""
+        try:
+            hostname = socket.gethostbyaddr(ip)[0]
+            # Don't return IP as hostname
+            if hostname == ip:
+                return ""
+            return hostname
+        except (socket.herror, socket.gaierror, socket.timeout):
+            # No reverse DNS entry
+            return ""
+        except Exception as e:
+            self.logger.debug(f"Error getting hostname for {ip}: {e}")
+            return ""
+
     def get_mac_address(self, ip, hostname):
         try:
             mac = None
-            retries = 5
-            while not mac and retries > 0:
-                mac = gma(ip=ip)
-                if not mac:
-                    time.sleep(2)
-                    retries -= 1
+            retries = 3  # Reduced retries for faster scanning
+
+            # First try without ping
+            mac = gma(ip=ip)
+
+            # If no MAC, ping to populate ARP cache then retry
             if not mac:
-                mac = f"{ip}_{hostname}" if hostname else f"{ip}_NoHostname"
+                try:
+                    # Quick ping to populate ARP cache
+                    subprocess.run(
+                        ['ping', '-c', '1', '-W', '1', ip],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=2
+                    )
+                    time.sleep(0.5)  # Give ARP cache time to update
+                except Exception:
+                    pass
+
+                # Retry MAC lookup after ping
+                while not mac and retries > 0:
+                    mac = gma(ip=ip)
+                    if not mac:
+                        time.sleep(0.5)
+                        retries -= 1
+
+            if not mac:
+                # MAC lookup failed (host may be on different subnet/VLAN)
+                self.logger.debug(f"Could not get MAC for {ip} (may be on different subnet)")
+                return ""
             return mac
         except Exception as e:
             self.logger.error(f"Error in get_mac_address: {e}")
-            return None
+            return ""
 
     class PortScanner:
         def __init__(self, outer_instance, target, open_ports, portstart, portend, extra_ports):
@@ -392,7 +446,13 @@ class NetworkScanner:
             if self.outer_instance.blacklistcheck and ip in self.outer_instance.ip_scan_blacklist:
                 return
             try:
+                # Try nmap hostname first, then fallback to reverse DNS
                 hostname = self.outer_instance.nm[ip].hostname() if self.outer_instance.nm[ip].hostname() else ''
+                if not hostname:
+                    hostname = self.outer_instance.get_hostname(ip)
+                # Don't use IP as hostname - if hostname equals IP, treat as unknown
+                if hostname == ip:
+                    hostname = ''
                 mac = self.outer_instance.get_mac_address(ip, hostname)
                 if not self.outer_instance.blacklistcheck or mac not in self.outer_instance.mac_scan_blacklist:
                     with self.outer_instance.lock:
@@ -419,7 +479,7 @@ class NetworkScanner:
 
             for i, ip in enumerate(self.ip_data.ip_list):
                 if i % 10 == 0:
-                    self.logger.debug(f"Port scanning progress: {i}/{total_ips}")
+                    self.logger.info(f"Port scanning progress: {i}/{total_ips}")
                 port_scanner = self.outer_instance.PortScanner(self.outer_instance, ip, self.open_ports, self.portstart, self.portend, self.extra_ports)
                 port_scanner.start()
 
@@ -468,22 +528,27 @@ class NetworkScanner:
 
         def save_results(self):
             try:
+                headers = ['Total Open Ports', 'Alive Hosts Count', 'All Known Hosts Count', 'Vulnerabilities Count']
+                row_data = {
+                    'Total Open Ports': self.total_open_ports,
+                    'Alive Hosts Count': self.alive_hosts_count,
+                    'All Known Hosts Count': self.all_known_hosts_count,
+                    'Vulnerabilities Count': 0  # Preserved from existing or default to 0
+                }
+
+                # Read existing vulnerabilities count if file exists
                 if os.path.exists(self.output_csv_path):
-                    rows = []
                     with open(self.output_csv_path, 'r') as file:
                         reader = csv.DictReader(file)
-                        headers = reader.fieldnames
                         for row in reader:
-                            row['Total Open Ports'] = self.total_open_ports
-                            row['Alive Hosts Count'] = self.alive_hosts_count
-                            row['All Known Hosts Count'] = self.all_known_hosts_count
-                            rows.append(row)
-                    with open(self.output_csv_path, 'w', newline='') as file:
-                        writer = csv.DictWriter(file, fieldnames=headers)
-                        writer.writeheader()
-                        writer.writerows(rows)
-                else:
-                    self.logger.error(f"File {self.output_csv_path} does not exist.")
+                            row_data['Vulnerabilities Count'] = row.get('Vulnerabilities Count', 0)
+                            break
+
+                # Write updated values (creates file if missing)
+                with open(self.output_csv_path, 'w', newline='') as file:
+                    writer = csv.DictWriter(file, fieldnames=headers)
+                    writer.writeheader()
+                    writer.writerow(row_data)
             except Exception as e:
                 self.logger.error(f"Error in save_results: {e}")
 
@@ -508,11 +573,19 @@ class NetworkScanner:
             except Exception as e:
                 self.logger.error(f"Error in clean_scan_results: {e}")
 
-    def scan(self):
+    def scan(self, target_network=None):
+        start_time = time.time()
+        self.logger.lifecycle_start("NetworkScanner")
         try:
             self.shared_data.bjornorch_status = "NetworkScanner"
             self.logger.info(f"Starting Network Scanner")
-            network = self.get_network()
+            # Use specified network or auto-detect
+            if target_network:
+                import ipaddress
+                network = ipaddress.IPv4Network(target_network, strict=False)
+                self.logger.info(f"Network: {network} (user selected)")
+            else:
+                network = self.get_network()
             self.shared_data.bjornstatustext2 = str(network)
             portstart = self.shared_data.portstart
             portend = self.shared_data.portend
@@ -541,7 +614,7 @@ class NetworkScanner:
                         alive = '1' if mac in alive_macs else '0'
                         writer.writerow([ip, hostname, alive, mac] + [str(port) if port in ports else '' for port in all_ports])
 
-            self.update_netkb(netkbfile, netkb_data, alive_macs)
+            self.update_netkb(netkbfile, netkb_data, alive_macs, network)
 
             if self.displaying_csv:
                 self.display_csv(csv_result_file)
@@ -552,8 +625,13 @@ class NetworkScanner:
             updater = self.LiveStatusUpdater(source_csv_path, output_csv_path)
             updater.update_livestatus()
             updater.clean_scan_results(self.shared_data.scan_results_dir)
+
+            duration = time.time() - start_time
+            self.logger.lifecycle_end("NetworkScanner", 'success', duration)
         except Exception as e:
             self.logger.error(f"Error in scan: {e}")
+            duration = time.time() - start_time
+            self.logger.lifecycle_end("NetworkScanner", 'failed', duration)
 
     def start(self):
         if not self.running:
@@ -566,7 +644,9 @@ class NetworkScanner:
         if self.running:
             self.running = False
             if self.thread.is_alive():
-                self.thread.join()
+                self.thread.join(timeout=60)  # 60 second timeout for graceful shutdown
+                if self.thread.is_alive():
+                    logger.warning("NetworkScanner thread did not terminate within 60s timeout")
             logger.info("NetworkScanner stopped.")
 
 if __name__ == "__main__":

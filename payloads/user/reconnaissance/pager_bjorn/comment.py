@@ -14,7 +14,7 @@ from init_shared import shared_data
 from logger import Logger
 import os
 
-logger = Logger(name="comment.py", level=logging.DEBUG)
+logger = Logger(name="comment.py", level=logging.INFO)
 
 class Commentaireia:
     """Provides context-based random comments for bjorn."""
@@ -34,7 +34,7 @@ class Commentaireia:
             try:
                 with open(cache_file, 'r') as file:
                     comments_data = json.load(file)
-                    logger.info("Comments loaded successfully from cache.")
+                    logger.debug("Comments loaded from cache")
                     return comments_data
             except (FileNotFoundError, json.JSONDecodeError):
                 logger.warning("Cache file is corrupted or not found. Loading from the original file.")
@@ -43,7 +43,7 @@ class Commentaireia:
         try:
             with open(commentsfile, 'r') as file:
                 comments_data = json.load(file)
-                logger.info("Comments loaded successfully from JSON file.")
+                logger.debug("Comments loaded from JSON file")
                 # Save to cache
                 with open(cache_file, 'w') as cache:
                     json.dump(comments_data, cache)

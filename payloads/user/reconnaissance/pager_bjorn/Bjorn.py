@@ -36,12 +36,10 @@ from comment import Commentaireia
 from orchestrator import Orchestrator
 from logger import Logger
 
-# Web server is optional (not used on Pager)
-web_thread = None
-def handle_exit_web(sig, frame):
-    pass
+# Import web server
+from webapp import web_thread, handle_exit_web
 
-logger = Logger(name="Bjorn.py", level=logging.DEBUG)
+logger = Logger(name="Bjorn.py", level=logging.INFO)
 
 class Bjorn:
     """Main class for Bjorn. Manages the primary operations of the application."""
@@ -50,6 +48,7 @@ class Bjorn:
         self.commentaire_ia = Commentaireia()
         self.orchestrator_thread = None
         self.orchestrator = None
+        self._orchestrator_lock = threading.Lock()  # Prevent race condition on start
 
     def run(self):
         """Main loop for Bjorn. Waits for Wi-Fi connection and starts Orchestrator."""
@@ -78,20 +77,21 @@ class Bjorn:
 
     def start_orchestrator(self):
         """Start the orchestrator thread."""
-        self.is_wifi_connected() # reCheck if Wi-Fi is connected before starting the orchestrator
-        if self.wifi_connected:  # Check if Wi-Fi is connected before starting the orchestrator
-            if self.orchestrator_thread is None or not self.orchestrator_thread.is_alive():
-                logger.info("Starting Orchestrator thread...")
-                self.shared_data.orchestrator_should_exit = False
-                self.shared_data.manual_mode = False
-                self.orchestrator = Orchestrator()
-                self.orchestrator_thread = threading.Thread(target=self.orchestrator.run)
-                self.orchestrator_thread.start()
-                logger.info("Orchestrator thread started, automatic mode activated.")
+        with self._orchestrator_lock:  # Prevent race condition
+            self.is_wifi_connected()  # reCheck if Wi-Fi is connected before starting the orchestrator
+            if self.wifi_connected:  # Check if Wi-Fi is connected before starting the orchestrator
+                if self.orchestrator_thread is None or not self.orchestrator_thread.is_alive():
+                    logger.info("Starting Orchestrator thread...")
+                    self.shared_data.orchestrator_should_exit = False
+                    self.shared_data.manual_mode = False
+                    self.orchestrator = Orchestrator()
+                    self.orchestrator_thread = threading.Thread(target=self.orchestrator.run)
+                    self.orchestrator_thread.start()
+                    logger.info("Orchestrator thread started, automatic mode activated.")
+                else:
+                    logger.info("Orchestrator thread is already running.")
             else:
-                logger.info("Orchestrator thread is already running.")
-        else:
-            logger.warning("Cannot start Orchestrator: Wi-Fi is not connected.")
+                logger.warning("Cannot start Orchestrator: Wi-Fi is not connected.")
 
     def stop_orchestrator(self):
         """Stop the orchestrator thread."""
@@ -171,13 +171,13 @@ if __name__ == "__main__":
         bjorn_thread = threading.Thread(target=bjorn.run)
         bjorn_thread.start()
 
-        # Web server disabled on Pager
-        # if shared_data.config.get("websrv", False):
-        #     logger.info("Starting the web server...")
-        #     web_thread.start()
+        # Start web server
+        logger.info("Starting the web server...")
+        shared_data.webapp_should_exit = False
+        web_thread.start()
 
-        signal.signal(signal.SIGINT, lambda sig, frame: handle_exit(sig, frame, display_thread, bjorn_thread, None))
-        signal.signal(signal.SIGTERM, lambda sig, frame: handle_exit(sig, frame, display_thread, bjorn_thread, None))
+        signal.signal(signal.SIGINT, lambda sig, frame: handle_exit(sig, frame, display_thread, bjorn_thread, web_thread))
+        signal.signal(signal.SIGTERM, lambda sig, frame: handle_exit(sig, frame, display_thread, bjorn_thread, web_thread))
 
     except Exception as e:
         logger.error(f"An exception occurred during thread start: {e}")

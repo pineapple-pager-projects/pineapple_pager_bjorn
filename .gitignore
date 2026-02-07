@@ -17,3 +17,8 @@ logs/
 
 # Local dev
 .env
+libs-old/
+
+# Exclude all .md files except README.md
+*.md
+!README.md

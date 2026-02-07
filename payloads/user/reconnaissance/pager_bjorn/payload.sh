@@ -226,41 +226,156 @@ check_dependencies
 # Check network connectivity
 check_network
 
-# Show menu
+# Loot directory paths
+LOOT_DIR="/mmc/root/loot/bjorn"
+LOGS_DIR="$LOOT_DIR/logs"
+CREDS_DIR="$LOOT_DIR/output/crackedpwd"
+STOLEN_DIR="$LOOT_DIR/output/data_stolen"
+
+# Clear functions
+clear_logs() {
+    LOG ""
+    LOG "Clearing logs..."
+    rm -rf "$LOGS_DIR"/* 2>/dev/null
+    LOG "green" "Logs cleared!"
+    sleep 1
+}
+
+clear_credentials() {
+    LOG ""
+    LOG "Clearing credentials..."
+    rm -f "$CREDS_DIR"/*.csv 2>/dev/null
+    LOG "green" "Credentials cleared!"
+    sleep 1
+}
+
+clear_stolen() {
+    LOG ""
+    LOG "Clearing stolen data..."
+    rm -rf "$STOLEN_DIR"/* 2>/dev/null
+    LOG "green" "Stolen data cleared!"
+    sleep 1
+}
+
+clear_all() {
+    LOG ""
+    LOG "Clearing all data..."
+    rm -rf "$LOGS_DIR"/* 2>/dev/null
+    rm -f "$CREDS_DIR"/*.csv 2>/dev/null
+    rm -rf "$STOLEN_DIR"/* 2>/dev/null
+    rm -f "$LOOT_DIR/netkb.csv" 2>/dev/null
+    rm -f "$LOOT_DIR/livestatus.csv" 2>/dev/null
+    rm -rf "$LOOT_DIR/output/scan_results"/* 2>/dev/null
+    rm -rf "$LOOT_DIR/output/vulnerabilities"/* 2>/dev/null
+    LOG "green" "All data cleared!"
+    sleep 1
+}
+
+show_menu() {
+    LOG ""
+    LOG "green" "=========================================="
+    LOG "green" "              BJORN"
+    LOG "green" "   Autonomous Network Reconnaissance"
+    LOG "green" "=========================================="
+    LOG ""
+    LOG "Tamagotchi-style hacking companion."
+    LOG "Scans networks, finds vulnerabilities,"
+    LOG "and collects credentials automatically."
+    LOG ""
+    LOG "Network: $SELECTED_INTERFACE ($SELECTED_IP)"
+    LOG "Web UI:  http://$SELECTED_IP:8000"
+    LOG ""
+    LOG "green" "  GREEN = Start Bjorn"
+    LOG "red" "  RED   = Exit"
+    LOG ""
+    LOG "  UP    = Clear Logs"
+    LOG "  LEFT  = Clear Stolen Data"
+    LOG "  RIGHT = Clear Credentials"
+    LOG "  DOWN  = Clear All"
+    LOG ""
+}
+
+# Show menu and handle input
+show_menu
+
+while true; do
+    BUTTON=$(WAIT_FOR_INPUT 2>/dev/null)
+    case "$BUTTON" in
+        "UP")
+            clear_logs
+            show_menu
+            ;;
+        "DOWN")
+            clear_all
+            show_menu
+            ;;
+        "LEFT")
+            clear_stolen
+            show_menu
+            ;;
+        "RIGHT")
+            clear_credentials
+            show_menu
+            ;;
+        "RED"|"B")
+            LOG ""
+            LOG "Exiting."
+            exit 0
+            ;;
+        "GREEN"|"A")
+            break
+            ;;
+    esac
+done
+
+# Start Bjorn (GREEN was pressed)
+LOG ""
+SPINNER_ID=$(START_SPINNER "Starting Bjorn...")
+/etc/init.d/pineapplepager stop 2>/dev/null
+sleep 0.3
+STOP_SPINNER "$SPINNER_ID" 2>/dev/null
+
+# Get Pager's IP for web access (use br-lan IP which is accessible)
+PAGER_IP=$(ip -4 addr show br-lan 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+if [ -z "$PAGER_IP" ]; then
+    # Fallback to any available IP
+    PAGER_IP=$(ip -4 addr 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '127.0.0.1' | head -1)
+fi
+
 LOG ""
 LOG "green" "=========================================="
-LOG "green" "              BJORN"
-LOG "green" "   Autonomous Network Reconnaissance"
+LOG "green" "           BJORN STARTED"
 LOG "green" "=========================================="
 LOG ""
-LOG "Tamagotchi-style hacking companion."
-LOG "Scans networks, finds vulnerabilities,"
-LOG "and collects credentials automatically."
+LOG "Scanning network: $SELECTED_INTERFACE"
 LOG ""
-LOG "Network: $SELECTED_INTERFACE ($SELECTED_IP)"
+if [ -n "$PAGER_IP" ]; then
+    LOG "green" "Web UI: http://$PAGER_IP:8000"
+fi
 LOG ""
-LOG "green" "  GREEN = Start Bjorn"
-LOG "red" "  RED   = Exit"
+LOG "Press RED to stop Bjorn"
 LOG ""
 
-# Wait for selection
-BUTTON=$(WAIT_FOR_INPUT 2>/dev/null)
-case "$BUTTON" in
-    "GREEN"|"A")
+cd "$PAYLOAD_DIR"
+export BJORN_INTERFACE="$SELECTED_INTERFACE"
+export BJORN_IP="$SELECTED_IP"
+python3 Bjorn.py &
+BJORN_PID=$!
+
+# Wait for button press to stop
+while kill -0 $BJORN_PID 2>/dev/null; do
+    BUTTON=$(WAIT_FOR_INPUT -t 1 2>/dev/null)
+    if [ "$BUTTON" = "RED" ] || [ "$BUTTON" = "B" ]; then
         LOG ""
-        LOG "Starting Bjorn..."
-        /etc/init.d/pineapplepager stop 2>/dev/null
-        sleep 0.3
-        cd "$PAYLOAD_DIR"
-        export BJORN_INTERFACE="$SELECTED_INTERFACE"
-        export BJORN_IP="$SELECTED_IP"
-        python3 Bjorn.py
-        /etc/init.d/pineapplepager start 2>/dev/null
-        ;;
-    "RED"|"B"|*)
-        LOG ""
-        LOG "Exiting."
-        ;;
-esac
+        SPINNER_ID=$(START_SPINNER "Stopping Bjorn...")
+        kill $BJORN_PID 2>/dev/null
+        wait $BJORN_PID 2>/dev/null
+        STOP_SPINNER "$SPINNER_ID" 2>/dev/null
+        LOG "green" "Bjorn stopped."
+        break
+    fi
+done
+
+/etc/init.d/pineapplepager start 2>/dev/null
 
 exit 0
