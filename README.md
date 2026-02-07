@@ -44,9 +44,9 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 ## Requirements
 
 - WiFi Pineapple Pager with firmware 1.x+
-- Python3 and nmap (pre-installed on Pager)
 - **Network connection** - Pager must be connected to a network to scan (WiFi client mode or Ethernet/USB)
-- All Python dependencies are bundled - no internet required
+- **Internet connection** (first run only) - Required to install Python3 and nmap via opkg
+- All Python dependencies are bundled in `lib/` - only system packages need internet
 
 ## Installation
 
@@ -308,9 +308,9 @@ After running Bjorn against test targets, you should see:
 ## Troubleshooting
 
 ### Bjorn won't start
-- Ensure Python 3 is installed (`opkg install python3 python3-ctypes`)
-- Check that `libpagerctl.so` exists in the payload directory
-- Verify network connectivity
+- Check that the Pager has internet access (required for first run to install dependencies)
+- The payload automatically installs Python3 and nmap - check the display for installation progress
+- If installation fails, try running the payload again with internet connectivity
 
 ### No hosts discovered
 - Check that you're connected to an active network
