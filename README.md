@@ -26,7 +26,7 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 - **File Exfiltration** - Automatically steals sensitive files from compromised hosts
 - **SQL Data Theft** - Dumps database tables from MySQL servers
 - **Web Interface** - Real-time log viewer and control panel at `http://<pager-ip>:8000`
-- **E-ink Display** - Status updates on the Pager's screen
+- **LCD Display** - Status updates on the Pager's full color screen
 
 ## Supported Protocols
 
