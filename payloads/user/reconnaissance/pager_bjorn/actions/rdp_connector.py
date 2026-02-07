@@ -189,6 +189,7 @@ class RDPConnector:
                     # File I/O outside lock
                     self.save_results()
                     self.removeduplicates()
+                    self.shared_data.record_zombie(mac_address, adresse_ip)
             finally:
                 self.queue.task_done()
                 with self.progress_lock:
@@ -217,6 +218,7 @@ class RDPConnector:
                 self.results.append([mac_address, adresse_ip, hostname, "[ANY]", "[NO AUTH REQUIRED]", port])
             self.save_results()
             self.removeduplicates()
+            self.shared_data.record_zombie(mac_address, adresse_ip)
             with self.no_auth_lock:
                 self.no_auth_ips[adresse_ip] = True
             return True, self.results  # Return success - we logged the no-auth finding

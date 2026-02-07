@@ -381,6 +381,7 @@ class SMBConnector:
                         logger.info(f"Guest access on {adresse_ip}: {len(self.guest_shares)} shares")
                         self.save_results()
                         self.removeduplicates()
+                        self.shared_data.record_zombie(mac_address, adresse_ip)
             except Exception as e:
                 logger.debug(f"Error enumerating guest shares on {adresse_ip}: {e}")
 
@@ -451,6 +452,7 @@ class SMBConnector:
                     success_flag[0] = True
                 self.save_results()
                 self.removeduplicates()
+                self.shared_data.record_zombie(mac_address, adresse_ip)
 
             # Continue brute force to find shares NOT accessible via guest
             smb2_attempt_count = 0
@@ -477,6 +479,7 @@ class SMBConnector:
                                     success_flag[0] = True
                                 self.save_results()
                                 self.removeduplicates()
+                                self.shared_data.record_zombie(mac_address, adresse_ip)
                     if self.shared_data.timewait_smb > 0:
                         time.sleep(self.shared_data.timewait_smb)
 

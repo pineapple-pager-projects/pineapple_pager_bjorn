@@ -340,6 +340,24 @@ class SharedData:
         except Exception as e:
             logger.error(f"Unexpected error occurred while deleting web console log file: {e}")
 
+    def record_zombie(self, mac_address, ip_address):
+        """Record a compromised host (zombie) - only counts each host once."""
+        try:
+            # Use MAC_IP as unique identifier for the host
+            zombie_id = f"{mac_address}_{ip_address}".replace(":", "-")
+            zombie_file = os.path.join(self.zombiesdir, zombie_id)
+
+            # Only create if it doesn't exist (avoid counting same host multiple times)
+            if not os.path.exists(zombie_file):
+                with open(zombie_file, 'w') as f:
+                    f.write(f"{mac_address},{ip_address}\n")
+                logger.debug(f"Recorded new zombie: {mac_address} ({ip_address})")
+                return True  # New zombie recorded
+            return False  # Already recorded
+        except Exception as e:
+            logger.error(f"Error recording zombie: {e}")
+            return False
+
     def create_livestatusfile(self):
         """Create the live status file."""
         try:

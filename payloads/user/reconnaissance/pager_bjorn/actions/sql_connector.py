@@ -165,6 +165,7 @@ class SQLConnector:
                     # File I/O outside lock
                     self.save_results()
                     self.remove_duplicates()
+                    self.shared_data.record_zombie(mac_address, adresse_ip)
             finally:
                 self.queue.task_done()
                 with self.progress_lock:
