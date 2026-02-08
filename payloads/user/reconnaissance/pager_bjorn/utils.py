@@ -954,10 +954,10 @@ class WebUtils:
 
     def clear_files(self, handler):
         try:
-            # Clear logs, stolen data, scan results - but NOT credentials
+            # Clear logs, stolen data, scan results, zombies - but NOT credentials
             loot_dir = self.shared_data.loot_dir
             command = f"""
-            rm -rf {loot_dir}/logs/* && rm -rf {loot_dir}/output/data_stolen/* && rm -rf {loot_dir}/output/scan_results/* && rm -rf {loot_dir}/output/vulnerabilities/* && rm -rf {loot_dir}/netkb.csv && rm -rf {loot_dir}/livestatus.csv && rm -rf {loot_dir}/archives/*
+            rm -rf {loot_dir}/logs/* && rm -rf {loot_dir}/output/data_stolen/* && rm -rf {loot_dir}/output/scan_results/* && rm -rf {loot_dir}/output/vulnerabilities/* && rm -rf {loot_dir}/output/zombies/* && rm -rf {loot_dir}/netkb.csv && rm -rf {loot_dir}/livestatus.csv && rm -rf {loot_dir}/archives/*
             """
             result = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             stdout, stderr = result.communicate()
