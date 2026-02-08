@@ -236,51 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function loadDropdown() {
-    const dropdownContent = `
-        <div class="dropdown">
-            <button type="button" class="toolbar-button" onclick="toggleDropdown()" data-open="false">
-                <img src="/web/images/manual_icon.png" alt="Icon_actions" style="height: 50px;">
-            </button>
-            <div class="dropdown-content">
-                <button type="button" onclick="clear_files()">Clear Files</button>
-                <button type="button" onclick="clear_files_light()">Clear Files Light</button>
-                <button type="button" onclick="reboot_system()">Reboot</button>
-                <button type="button" onclick="shutdown_system()">Shutdown</button>
-                <button type="button" onclick="restart_bjorn_service()">Restart Bjorn Service</button>
-                <button type="button" onclick="backup_data()">Backup</button>
-                <button type="button" onclick="restore_data()">Restore</button>
-                <button type="button" onclick="stop_orchestrator()">Stop Orchestrator</button>
-                <button type="button" onclick="start_orchestrator()">Start Orchestrator</button>
-                <button type="button" onclick="initialize_csv()">Create Livestatus, Actions & Netkb CSVs</button>
-            </div>
-        </div>
-    `;
-    document.getElementById('dropdown-container').innerHTML = dropdownContent;
-}
-
-function loadBjornDropdown() {
-    const bjornDropdownContent = `
-        <div class="dropdown bjorn-dropdown">
-            <button type="button" class="toolbar-button" onclick="toggleBjornDropdown()" data-open="false">
-                <img src="/web/images/bjorn_icon.png" alt="Icon_bjorn" style="height: 50px;">
-            </button>
-            <div class="dropdown-content">
-                <img id="screenImage_Home"  onclick="window.location.href='/bjorn.html'" src="screen.png" alt="Bjorn" style="width: 100%;">
-            </div>
-        </div>
-    `;
-    document.getElementById('bjorn-dropdown-container').innerHTML = bjornDropdownContent;
-    startLiveview(); // Start live view when Bjorn dropdown is loaded
-}
-
-// Call the function to load the dropdowns when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    loadDropdown();
-    loadBjornDropdown();
-});
-
-
 function clear_files() {
     fetch('/clear_files', { method: 'POST' })
         .then(response => response.json())
@@ -408,69 +363,6 @@ function closeDropdownIfOpen(event) {
 }
 
 // actions.js
-
-let imageIntervalId;
-let intervalId;
-const delay = 2000 // Adjust this value to match your delay
-
-let lastUpdate = 0;
-
-function updateImage() {
-    const now = Date.now();
-    if (now - lastUpdate >= delay) {
-        lastUpdate = now;
-        const image = document.getElementById("screenImage_Home");
-        const newImage = new Image();
-        newImage.onload = function() {
-            image.src = newImage.src; // Update only if the new image loads successfully
-        };
-        newImage.onerror = function() {
-            console.warn("New image could not be loaded, keeping the previous image.");
-        };
-        newImage.src = "screen.png?t=" + new Date().getTime(); // Prevent caching
-    }
-}
-
-function startLiveview() {
-    updateImage(); // Immediately update the image
-    intervalId = setInterval(updateImage, delay); // Then update at the specified interval
-}
-
-function stopLiveview() {
-    clearInterval(intervalId);
-}
-
-// Dropdown toggle logic for Bjorn
-function toggleBjornDropdown() {
-    const dropdown = document.querySelector('.bjorn-dropdown');
-    const button = document.querySelector('.bjorn-button');
-    const isOpen = button.getAttribute('data-open') === 'true';
-
-    if (isOpen) {
-        dropdown.classList.remove('show');
-        button.setAttribute('data-open', 'false');
-        stopLiveview(); // Stop image refresh when closing
-    } else {
-        dropdown.classList.add('show');
-        button.setAttribute('data-open', 'true');
-        startLiveview(); // Start image refresh when opening
-    }
-}
-
-function closeBjornDropdownIfOpen(event) {
-    const dropdown = document.querySelector('.bjorn-dropdown');
-    const button = document.querySelector('.bjorn-button');
-    const isOpen = button.getAttribute('data-open') === 'true';
-
-    if (!event.target.closest('.bjorn-dropdown') && isOpen) {
-        dropdown.classList.remove('show');
-        button.setAttribute('data-open', 'false');
-        stopLiveview(); // Stop image refresh when closing
-    }
-}
-
-document.addEventListener('click', closeBjornDropdownIfOpen);
-document.addEventListener('touchstart', closeBjornDropdownIfOpen);
 
 // Existing logic for Actions dropdown
 function toggleDropdown() {
