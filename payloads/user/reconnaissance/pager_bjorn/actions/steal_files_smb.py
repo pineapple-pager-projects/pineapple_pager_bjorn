@@ -4,10 +4,10 @@ import logging
 import time
 import subprocess
 
-# Add vendored libs to path for pysmb
-_libs_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'libs')
-if _libs_path not in sys.path:
-    sys.path.insert(0, _libs_path)
+# Add vendored lib to path for pysmb
+_lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'lib')
+if _lib_path not in sys.path:
+    sys.path.insert(0, _lib_path)
 
 from smb.SMBConnection import SMBConnection
 from smb.base import SharedFile

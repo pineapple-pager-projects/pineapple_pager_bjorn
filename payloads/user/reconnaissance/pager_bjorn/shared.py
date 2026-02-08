@@ -172,6 +172,7 @@ class SharedData:
 
             "__title_performance__": "Performance Settings",
             "worker_threads": 5,  # Number of concurrent worker threads for brute force (reduce for low-memory devices)
+            "bruteforce_queue_timeout": 600,  # Max seconds to wait for bruteforce queue processing per host
         }
 
     def update_mac_blacklist(self):
@@ -594,7 +595,7 @@ class SharedData:
                 random_index = random.randint(0, len(self.image_series[status]) - 1)
                 self.current_image_path = self.image_series[status][random_index]
             else:
-                logger.warning(f"No animation frames for status {status}, using IDLE")
+                logger.debug(f"No animation frames for status {status}, using IDLE")
                 if "IDLE" in self.image_series and self.image_series["IDLE"]:
                     random_index = random.randint(0, len(self.image_series["IDLE"]) - 1)
                     self.current_image_path = self.image_series["IDLE"][random_index]

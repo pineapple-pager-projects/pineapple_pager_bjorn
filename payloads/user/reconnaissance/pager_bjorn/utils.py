@@ -288,7 +288,10 @@ class WebUtils:
 
             self.logger.info(f"Received request to execute {action_class} on {ip}:{port}")
 
-            # Clear exit flag so manual attacks can run
+            # Keep orchestrator in manual mode (paused) but allow this action to run
+            self.shared_data.manual_mode = True
+            # Save and temporarily clear exit flag so manual attack can run
+            saved_exit_flag = self.shared_data.orchestrator_should_exit
             self.shared_data.orchestrator_should_exit = False
 
             # Handle NetworkScanner specially - it scans the network, doesn't need an IP
@@ -366,12 +369,20 @@ class WebUtils:
                 self.logger.info(f"[LIFECYCLE] {action_class} ENDED (failure) for {ip}:{port} in {duration:.1f}s")
             self.shared_data.write_data(current_data)
 
+            # Restore exit flag after manual attack
+            self.shared_data.orchestrator_should_exit = saved_exit_flag
+
             handler.send_response(200)
             handler.send_header("Content-type", "application/json")
             handler.end_headers()
             handler.wfile.write(json.dumps({"status": "success", "message": "Manual attack executed"}).encode('utf-8'))
         except Exception as e:
             self.logger.error(f"Error executing manual attack: {e}")
+            # Restore exit flag on error too
+            try:
+                self.shared_data.orchestrator_should_exit = saved_exit_flag
+            except:
+                pass
             handler.send_response(500)
             handler.send_header("Content-type", "application/json")
             handler.end_headers()
@@ -1214,7 +1225,7 @@ class WebUtils:
                     html += f'<tr class="host-header clickable" onclick="toggleCard({card_id})">'
                     html += f'<td colspan="2"><b>IP:</b> {ips}</td>'
                     html += f'<td colspan="2"><b>Host:</b> {hostnames if hostnames else "-"}</td>'
-                    html += f'<td class="{alive_class}"><b>Alive:</b> {alive_text}</td>'
+                    html += f'<td><b>Ports:</b> {ports if ports else "none"}</td>'
                     html += f'<td class="summary">{summary} <span class="toggle-icon" id="icon-{card_id}">▶</span></td>'
                     html += f'</tr>'
 
@@ -1222,10 +1233,10 @@ class WebUtils:
                     html += f'<tr class="details" id="details-{card_id}" style="display:none;"><td colspan="6">'
                     html += '<table class="inner-table"><tbody>'
 
-                    # MAC and Ports row
+                    # MAC and Alive row
                     html += f'<tr>'
                     html += f'<td colspan="3"><b>MAC:</b> {mac if mac else "-"}</td>'
-                    html += f'<td colspan="3"><b>Ports:</b> {ports if ports else "none"}</td>'
+                    html += f'<td colspan="3" class="{alive_class}"><b>Alive:</b> {alive_text}</td>'
                     html += f'</tr>'
 
                     # Brute Force results

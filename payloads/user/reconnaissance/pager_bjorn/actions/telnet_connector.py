@@ -123,7 +123,7 @@ class TelnetConnector:
             tn.read_until(b"Password: ", timeout=5)
             tn.write(garbage_pass.encode('ascii') + b"\n")
             time.sleep(1)
-            response = tn.expect([b"Login incorrect", b"Password: ", b"$ ", b"# "], timeout=5)
+            response = tn.expect([b"Login incorrect", b"Password: ", b"\\$ ", b"# "], timeout=5)
             tn.close()
             # If garbage creds get a shell, no real auth required
             if response[0] == 2 or response[0] == 3:
@@ -147,7 +147,7 @@ class TelnetConnector:
 
             # Wait to see if the login was successful
             time.sleep(2)
-            response = tn.expect([b"Login incorrect", b"Password: ", b"$ ", b"# "], timeout=5)
+            response = tn.expect([b"Login incorrect", b"Password: ", b"\\$ ", b"# "], timeout=5)
             tn.close()
 
             # Check if the login was successful
@@ -242,7 +242,7 @@ class TelnetConnector:
             threads.append(t)
 
         # Wait for queue with exit signal checking
-        queue_timeout = 300  # 5 minute max for queue processing
+        queue_timeout = self.shared_data.bruteforce_queue_timeout
         queue_start = time.time()
         while not self.queue.empty():
             if self.shared_data.orchestrator_should_exit:

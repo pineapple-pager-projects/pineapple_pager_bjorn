@@ -4,21 +4,14 @@
 # Stop: docker-compose down
 
 services:
-  # SSH server with weak credentials
-  # Credentials: admin:admin, root:password, test:test
+  # SSH server with weak credentials (minimal Alpine-based)
+  # Credentials: admin:admin, root:root, test:test
   ssh-target:
-    image: lscr.io/linuxserver/openssh-server:latest
+    build:
+      context: ./ssh
+      dockerfile: Dockerfile
     container_name: bjorn-ssh-target
     hostname: ssh-target
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=UTC
-      - PASSWORD_ACCESS=true
-      - USER_NAME=admin
-      - USER_PASSWORD=admin
-      - SUDO_ACCESS=true
-      - LISTEN_PORT=22
     ports:
       - "22:22"
     networks:

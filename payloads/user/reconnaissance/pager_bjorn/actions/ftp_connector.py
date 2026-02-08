@@ -233,7 +233,7 @@ class FTPConnector:
             threads.append(t)
 
         # Wait for queue with exit signal checking
-        queue_timeout = 300  # 5 minute max for queue processing
+        queue_timeout = self.shared_data.bruteforce_queue_timeout
         queue_start = time.time()
         while not self.queue.empty():
             if self.shared_data.orchestrator_should_exit:

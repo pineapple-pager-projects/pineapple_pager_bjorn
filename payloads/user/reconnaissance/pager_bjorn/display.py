@@ -71,6 +71,20 @@ class Display:
         self.last_led_status = None
         self.dialog_showing = False  # Flag to pause display updates during dialogs
 
+        # Brightness/dim settings
+        self.screen_brightness = getattr(self.shared_data, 'screen_brightness', 80)
+        self.screen_dim_brightness = getattr(self.shared_data, 'screen_dim_brightness', 20)
+        self.screen_dim_timeout = getattr(self.shared_data, 'screen_dim_timeout', 60)
+        self.last_activity_time = time.time()
+        self.is_dimmed = False
+
+        # Set initial brightness
+        try:
+            self.pager.set_brightness(self.screen_brightness)
+            logger.info(f"Screen brightness set to {self.screen_brightness}%")
+        except Exception as e:
+            logger.debug(f"Could not set brightness: {e}")
+
         self.start_threads()
         logger.info("Display initialization complete.")
 
@@ -105,6 +119,33 @@ class Display:
             self.update_vuln_count()
             time.sleep(300)
 
+    def wake_screen(self):
+        """Wake screen from dim state."""
+        if self.is_dimmed:
+            try:
+                self.pager.set_brightness(self.screen_brightness)
+                self.is_dimmed = False
+                logger.debug("Screen woken from dim")
+            except Exception as e:
+                logger.debug(f"Could not wake screen: {e}")
+        self.last_activity_time = time.time()
+
+    def dim_screen(self):
+        """Dim the screen to save battery."""
+        if not self.is_dimmed:
+            try:
+                self.pager.set_brightness(self.screen_dim_brightness)
+                self.is_dimmed = True
+                logger.debug("Screen dimmed")
+            except Exception as e:
+                logger.debug(f"Could not dim screen: {e}")
+
+    def check_dim_timeout(self):
+        """Check if screen should be dimmed due to inactivity."""
+        if self.screen_dim_timeout > 0 and not self.is_dimmed:
+            if time.time() - self.last_activity_time > self.screen_dim_timeout:
+                self.dim_screen()
+
     def handle_input_loop(self):
         """Handle button input - Red button shows exit confirmation."""
         logger.info("Input handler: Monitoring for button presses")
@@ -112,6 +153,9 @@ class Display:
             try:
                 # Wait for button press (blocking)
                 button = self.pager.wait_button()
+
+                # Any button press wakes the screen and resets activity timer
+                self.wake_screen()
 
                 # Red button (B) - show exit confirmation
                 if button & self.pager.BTN_B:
@@ -131,52 +175,114 @@ class Display:
                 time.sleep(1.0)
 
     def show_exit_confirmation(self):
-        """Show exit confirmation dialog. Returns True if user confirms exit."""
+        """Show pause menu with brightness control and exit option."""
         # Pause display updates while dialog is showing
         self.dialog_showing = True
         time.sleep(0.2)  # Let current render finish
 
-        # Draw confirmation dialog
-        self.pager.fill_rect(0, 0, self.width, self.height, self.WHITE)
+        # Get current brightness
+        current_brightness = self.pager.get_brightness()
+        if current_brightness < 0:
+            current_brightness = self.screen_brightness
 
-        # Draw dialog box
-        box_y = int(self.height * 0.3)
-        box_h = int(self.height * 0.4)
-        self.pager.fill_rect(10, box_y, self.width - 20, box_h, self.WHITE)
-        self.pager.rect(10, box_y, self.width - 20, box_h, self.BLACK)
-        self.pager.rect(12, box_y + 2, self.width - 24, box_h - 4, self.BLACK)
+        # Menu selection: 0 = BACK (default), 1 = EXIT
+        selected = 0
 
-        # Title - smaller font to fit
-        title_y = box_y + 15
-        self.pager.draw_ttf_centered(title_y, "EXIT BJORN?", self.BLACK, self.font_viking, int(10 * self.sy))
+        def draw_menu():
+            self.pager.fill_rect(0, 0, self.width, self.height, self.WHITE)
 
-        # Message - moved up
-        msg_y = box_y + int(45 * self.sy)
-        self.pager.draw_ttf_centered(msg_y, "Are you sure you", self.BLACK, self.font_arial, int(10 * self.sy))
-        self.pager.draw_ttf_centered(msg_y + int(18 * self.sy), "want to exit?", self.BLACK, self.font_arial, int(10 * self.sy))
+            # Draw dialog box
+            box_y = int(self.height * 0.15)
+            box_h = int(self.height * 0.7)
+            self.pager.fill_rect(10, box_y, self.width - 20, box_h, self.WHITE)
+            self.pager.rect(10, box_y, self.width - 20, box_h, self.BLACK)
+            self.pager.rect(12, box_y + 2, self.width - 24, box_h - 4, self.BLACK)
 
-        # Buttons - moved to bottom of box
-        btn_y = box_y + box_h - 45
-        green_color = self.pager.rgb(0, 150, 0)
-        red_color = self.pager.rgb(200, 0, 0)
+            # Title
+            title_y = box_y + 15
+            self.pager.draw_ttf_centered(title_y, "MENU", self.BLACK, self.font_viking, int(12 * self.sy))
 
-        # Green = Yes
-        self.pager.fill_rect(30, btn_y, 60, 28, green_color)
-        self.pager.draw_ttf(42, btn_y + 6, "YES", self.WHITE, self.font_arial, int(8 * self.sy))
+            # Brightness section
+            bright_y = box_y + int(50 * self.sy)
+            self.pager.draw_ttf_centered(bright_y, "BRIGHTNESS", self.BLACK, self.font_arial, int(9 * self.sy))
 
-        # Red = No
-        self.pager.fill_rect(self.width - 90, btn_y, 60, 28, red_color)
-        self.pager.draw_ttf(self.width - 78, btn_y + 6, "NO", self.WHITE, self.font_arial, int(8 * self.sy))
+            # Brightness bar
+            bar_y = bright_y + int(22 * self.sy)
+            bar_x = 30
+            bar_w = self.width - 60
+            bar_h = int(12 * self.sy)
 
-        self.pager.flip()
+            # Bar background
+            self.pager.fill_rect(bar_x, bar_y, bar_w, bar_h, self.GRAY)
+            # Bar fill
+            fill_w = int(bar_w * current_brightness / 100)
+            self.pager.fill_rect(bar_x, bar_y, fill_w, bar_h, self.BLACK)
+            # Bar outline
+            self.pager.rect(bar_x, bar_y, bar_w, bar_h, self.BLACK)
 
-        # Wait for confirmation
+            # Brightness percentage
+            pct_y = bar_y + bar_h + 5
+            self.pager.draw_ttf_centered(pct_y, f"{current_brightness}%", self.BLACK, self.font_arial, int(10 * self.sy))
+
+            # Menu buttons
+            btn_y = box_y + box_h - int(70 * self.sy)
+            btn_w = 80
+            btn_h = 32
+            btn_x = (self.width - btn_w) // 2
+
+            green_color = self.pager.rgb(0, 150, 0)
+            red_color = self.pager.rgb(200, 0, 0)
+
+            # BACK button (selected = 0)
+            if selected == 0:
+                # Draw selection highlight
+                self.pager.fill_rect(btn_x - 4, btn_y - 4, btn_w + 8, btn_h + 8, self.BLACK)
+            self.pager.fill_rect(btn_x, btn_y, btn_w, btn_h, green_color)
+            self.pager.draw_ttf(btn_x + 18, btn_y + 8, "BACK", self.WHITE, self.font_arial, int(9 * self.sy))
+
+            # EXIT button (selected = 1)
+            exit_btn_y = btn_y + btn_h + 12
+            if selected == 1:
+                # Draw selection highlight
+                self.pager.fill_rect(btn_x - 4, exit_btn_y - 4, btn_w + 8, btn_h + 8, self.BLACK)
+            self.pager.fill_rect(btn_x, exit_btn_y, btn_w, btn_h, red_color)
+            self.pager.draw_ttf(btn_x + 22, exit_btn_y + 8, "EXIT", self.WHITE, self.font_arial, int(9 * self.sy))
+
+            self.pager.flip()
+
+        draw_menu()
+
+        # Handle input
         while True:
             button = self.pager.wait_button()
-            if button & self.pager.BTN_A:  # Green = Yes, exit
+
+            if button & self.pager.BTN_DOWN:
+                # Physical DOWN = Visual LEFT = Decrease brightness
+                current_brightness = max(20, current_brightness - 10)
+                self.pager.set_brightness(current_brightness)
+                self.screen_brightness = current_brightness
+                draw_menu()
+            elif button & self.pager.BTN_UP:
+                # Physical UP = Visual RIGHT = Increase brightness
+                current_brightness = min(100, current_brightness + 10)
+                self.pager.set_brightness(current_brightness)
+                self.screen_brightness = current_brightness
+                draw_menu()
+            elif button & self.pager.BTN_LEFT:
+                # Physical LEFT = Visual UP = Move selection up
+                selected = 0
+                draw_menu()
+            elif button & self.pager.BTN_RIGHT:
+                # Physical RIGHT = Visual DOWN = Move selection down
+                selected = 1
+                draw_menu()
+            elif button & self.pager.BTN_A:  # Green = confirm selection
                 self.dialog_showing = False
-                return True
-            elif button & self.pager.BTN_B:  # Red = No, cancel
+                if selected == 0:
+                    return False  # BACK
+                else:
+                    return True   # EXIT
+            elif button & self.pager.BTN_B:  # Red = always go back
                 self.dialog_showing = False
                 return False
 
@@ -543,6 +649,10 @@ class Display:
 
     def render_frame(self):
         """Render complete frame matching original Bjorn."""
+        # Skip if dialog is showing (avoids overwriting exit confirmation)
+        if self.dialog_showing:
+            return
+
         self.pager.clear(self.WHITE)
 
         self.draw_header()
@@ -552,7 +662,9 @@ class Display:
         self.draw_frise()
         self.draw_character_and_corner_stats()
 
-        self.pager.flip()
+        # Double-check dialog isn't showing before flip (race condition protection)
+        if not self.dialog_showing:
+            self.pager.flip()
 
     def run(self):
         """Main display loop."""
@@ -564,6 +676,9 @@ class Display:
                 if self.dialog_showing:
                     time.sleep(0.1)
                     continue
+
+                # Check for auto-dim
+                self.check_dim_timeout()
 
                 self.display_comment(self.shared_data.bjornorch_status)
                 self.shared_data.update_bjornstatus()

@@ -134,14 +134,42 @@ class RDPConnector:
         command = f"{env_prefix}{sfreerdp_path} /v:{adresse_ip} /u:__noauth_test__ /p:__invalid__ /cert:ignore +auth-only"
         try:
             stdout, stderr, returncode = subprocess_with_timeout(command, timeout=15)
-            if returncode == 0:
-                # If this succeeds, RDP accepts any password (no auth required)
-                return True
-            return False
+            # If garbage credentials succeed, no auth is required
+            return self._check_rdp_auth_success(stdout, stderr, returncode)
         except TimeoutError:
             return False
         except subprocess.SubprocessError:
             return False
+
+    def _check_rdp_auth_success(self, stdout, stderr, returncode):
+        """
+        Check if RDP authentication succeeded based on output patterns.
+        Works with both real Windows RDP and NLA mock servers.
+
+        Success indicators:
+        - returncode 0: Full CredSSP success (Windows RDP)
+        - "exit status 0" in output: Full CredSSP success
+        - "Could not verify public key": NTLM auth passed (mock server - creds valid)
+        """
+        output = stdout.decode('utf-8', errors='ignore') + stderr.decode('utf-8', errors='ignore')
+
+        # Check for explicit failure indicators FIRST
+        if "STATUS_LOGON_FAILURE" in output:
+            return False
+
+        if returncode == 0:
+            return True
+
+        # Full CredSSP success - must be exactly "exit status 0" not "exit status 0x..."
+        if "Authentication only, exit status 0\n" in output or output.endswith("exit status 0"):
+            return True
+
+        # NTLM auth succeeded but pubKeyAuth failed (mock server)
+        # This means credentials are valid, just pubKeyAuth verification failed
+        if "Could not verify public key" in output:
+            return True
+
+        return False
 
     def rdp_connect(self, adresse_ip, user, password):
         """
@@ -153,10 +181,7 @@ class RDPConnector:
         command = f"{env_prefix}{sfreerdp_path} /v:{adresse_ip} /u:{user} /p:{password} /cert:ignore +auth-only"
         try:
             stdout, stderr, returncode = subprocess_with_timeout(command, timeout=15)
-            if returncode == 0:
-                return True
-            else:
-                return False
+            return self._check_rdp_auth_success(stdout, stderr, returncode)
         except TimeoutError:
             logger.lifecycle_timeout("RDPBruteforce", "sfreerdp auth", 15, adresse_ip)
             return False
@@ -245,7 +270,7 @@ class RDPConnector:
             threads.append(t)
 
         # Wait for queue with exit signal checking
-        queue_timeout = 300  # 5 minute max for queue processing
+        queue_timeout = self.shared_data.bruteforce_queue_timeout
         queue_start = time.time()
         while not self.queue.empty():
             if self.shared_data.orchestrator_should_exit:

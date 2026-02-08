@@ -309,20 +309,105 @@ class NetworkScanner:
             self.logger.error(f"Error in get_network: {e}")
             return None
 
+    def get_hostname_netbios(self, ip):
+        """Get hostname using NetBIOS name query (works for Windows/Samba devices)."""
+        try:
+            result = subprocess.run(
+                ['nmblookup', '-A', ip],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                # Parse output for hostname (first name entry, not workgroup)
+                for line in result.stdout.splitlines():
+                    line = line.strip()
+                    # Lines look like: "HOSTNAME        <00> -         B <ACTIVE>"
+                    if '<00>' in line and '<GROUP>' not in line:
+                        parts = line.split()
+                        if parts:
+                            hostname = parts[0]
+                            if hostname and hostname != ip:
+                                return hostname
+        except FileNotFoundError:
+            # nmblookup not installed
+            pass
+        except Exception as e:
+            self.logger.debug(f"NetBIOS lookup failed for {ip}: {e}")
+        return ""
+
+    def get_hostname_mdns(self, ip):
+        """Get hostname using mDNS/Avahi (works for Apple/Linux devices)."""
+        try:
+            result = subprocess.run(
+                ['avahi-resolve', '-a', ip],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Output: "192.168.1.100    hostname.local"
+                parts = result.stdout.strip().split()
+                if len(parts) >= 2:
+                    hostname = parts[1]
+                    # Remove .local suffix if present
+                    if hostname.endswith('.local'):
+                        hostname = hostname[:-6]
+                    if hostname and hostname != ip:
+                        return hostname
+        except FileNotFoundError:
+            # avahi-resolve not installed
+            pass
+        except Exception as e:
+            self.logger.debug(f"mDNS lookup failed for {ip}: {e}")
+        return ""
+
+    def get_hostname_nmap(self, ip):
+        """Get hostname using nmap with hostname resolution."""
+        try:
+            # Quick nmap scan with hostname resolution
+            result = subprocess.run(
+                ['nmap', '-sn', '-R', '--system-dns', ip],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                # Parse output for hostname
+                for line in result.stdout.splitlines():
+                    if 'Nmap scan report for' in line:
+                        # Format: "Nmap scan report for hostname (IP)" or just "Nmap scan report for IP"
+                        parts = line.replace('Nmap scan report for ', '').strip()
+                        if '(' in parts:
+                            hostname = parts.split('(')[0].strip()
+                            if hostname and hostname != ip:
+                                return hostname
+        except Exception as e:
+            self.logger.debug(f"Nmap hostname lookup failed for {ip}: {e}")
+        return ""
+
     def get_hostname(self, ip):
-        """Get hostname for IP using reverse DNS lookup."""
+        """Get hostname for IP using multiple methods."""
+        # Try reverse DNS first (fastest if available)
         try:
             hostname = socket.gethostbyaddr(ip)[0]
-            # Don't return IP as hostname
-            if hostname == ip:
-                return ""
-            return hostname
+            if hostname and hostname != ip:
+                return hostname
         except (socket.herror, socket.gaierror, socket.timeout):
-            # No reverse DNS entry
-            return ""
+            pass
         except Exception as e:
-            self.logger.debug(f"Error getting hostname for {ip}: {e}")
-            return ""
+            self.logger.debug(f"Reverse DNS failed for {ip}: {e}")
+
+        # Try NetBIOS (Windows/Samba devices)
+        hostname = self.get_hostname_netbios(ip)
+        if hostname:
+            return hostname
+
+        # Try mDNS/Avahi (Apple/Linux devices)
+        hostname = self.get_hostname_mdns(ip)
+        if hostname:
+            return hostname
+
+        # Try nmap with DNS resolution as last resort
+        hostname = self.get_hostname_nmap(ip)
+        if hostname:
+            return hostname
+
+        return ""
 
     def get_mac_address(self, ip, hostname):
         try:
