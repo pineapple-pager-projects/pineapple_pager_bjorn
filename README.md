@@ -20,13 +20,14 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 - **Autonomous Operation** - Set it and forget it. Bjorn continuously scans and attacks.
 - **Host-by-Host Attack Strategy** - Runs all applicable attacks on one host before moving to the next
 - **Network Discovery** - ARP scanning with ICMP ping fallback for alive host detection
+- **Hostname Resolution** - Multiple fallback methods (reverse DNS, NetBIOS, mDNS, nmap)
 - **Port Scanning** - Configurable port list with nmap integration
 - **Credential Brute Force** - Dictionary attacks against discovered services
 - **Guest/Anonymous Detection** - Detects and logs guest access, skips brute force to avoid false positives
 - **File Exfiltration** - Automatically steals sensitive files from compromised hosts
 - **SQL Data Theft** - Dumps database tables from MySQL servers
 - **Web Interface** - Real-time log viewer and control panel at `http://<pager-ip>:8000`
-- **LCD Display** - Status updates on the Pager's full color screen
+- **LCD Display** - Status updates on the Pager's full color screen with auto-dim for battery saving
 
 ## Supported Protocols
 
@@ -79,11 +80,23 @@ When launching Bjorn:
 | Button | Action |
 |--------|--------|
 | **GREEN** | Start Bjorn / Confirm |
-| **RED** | Exit / Cancel |
+| **RED** | Open Exit Menu |
 | **UP** | Clear Logs |
 | **LEFT** | Clear Stolen Data |
 | **RIGHT** | Clear Credentials |
 | **DOWN** | Clear All |
+
+### Exit Menu
+
+Press **RED** while Bjorn is running to open the exit menu:
+
+| Option | Description |
+|--------|-------------|
+| **Back** | Return to Bjorn |
+| **Brightness** | Adjust screen brightness (20-100%) |
+| **Exit** | Stop Bjorn and return to launcher |
+
+The screen automatically dims after a configurable timeout to save battery. Any button press wakes the screen.
 
 ### Web Interface
 
@@ -125,6 +138,13 @@ Edit `config/shared_config.json` to customize Bjorn's behavior:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `worker_threads` | 10 | Number of concurrent brute force threads |
+
+### Display Settings
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `screen_brightness` | 80 | Default screen brightness (20-100%) |
+| `screen_dim_brightness` | 25 | Brightness when dimmed (20-100%) |
+| `screen_dim_timeout` | 60 | Seconds of inactivity before dimming |
 
 ### Blacklists
 | Setting | Description |
@@ -284,17 +304,19 @@ docker-compose down
 
 ### Test Services & Credentials
 
-| Service | Port | IP Address | Credentials |
-|---------|------|------------|-------------|
-| SSH | 22 | 172.16.52.10 | admin:admin |
-| FTP | 21 | 172.16.52.11 | admin:admin |
-| SMB | 445 | 172.16.52.12 | public: anonymous, private: admin:admin |
-| MySQL | 3306 | 172.16.52.13 | root:root, admin:admin |
-| Telnet | 23 | 172.16.52.14 | admin:admin, root:root, test:test |
-| HTTP | 80, 8080 | 172.16.52.15 | N/A |
-| RDP | 3389 | 172.16.52.16 | admin:admin, root:root |
+| Service | Port | IP Address | Credentials | Notes |
+|---------|------|------------|-------------|-------|
+| SSH | 22 | 172.16.52.10 | admin:admin, test:test, root:root | Minimal Alpine container |
+| FTP | 21 | 172.16.52.11 | admin:admin | |
+| SMB | 445 | 172.16.52.12 | public: anonymous, private: admin:admin | |
+| MySQL | 3306 | 172.16.52.13 | root:root, admin:admin | |
+| Telnet | 23 | 172.16.52.14 | admin:admin, test:test, root:root | Minimal Alpine container |
+| HTTP | 80, 8080 | 172.16.52.15 | N/A | |
+| RDP | 3389 | 172.16.52.16 | admin:admin, root:root | NLA mock server |
 
 All services run on **172.16.52.0/24** - the same network as the Pager (172.16.52.1).
+
+The SSH and Telnet containers include test files for file stealing validation (`.env`, `.flag`, `.bashrc`, etc.).
 
 ### Expected Results
 
@@ -342,6 +364,7 @@ Wait 30-60 seconds after `docker-compose up` for MySQL to initialize.
 Features planned but not yet implemented:
 
 - **Vulnerability Scanner** - Nmap vuln script integration exists but is disabled. Requires web UI integration, loot page, display counter, and extensive testing before enabling.
+- **Web UI Log Duplicates** - Occasional duplicate log entries in web console due to JavaScript polling race condition. Cosmetic issue only - actual log files are correct.
 
 ---
 
