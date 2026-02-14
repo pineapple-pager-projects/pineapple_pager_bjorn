@@ -35,7 +35,7 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 | SSH      | 22   | Yes         | Yes           | Ported |
 | Telnet   | 23   | Yes         | Yes           | Ported |
 | SMB      | 445  | Yes         | Yes           | Ported |
-| MySQL    | 3306 | Yes         | Yes (data)    | Ported |
+| MySQL    | 3306 | Yes         | Yes           | Ported |
 | RDP      | 3389 | Yes         | Disabled*     | Ported |
 
 *RDP file exfiltration requires full xfreerdp with drive channels (not available on MIPS)
