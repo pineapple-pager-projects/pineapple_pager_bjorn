@@ -164,9 +164,9 @@ class BjornMenu:
         items.append({
             'toggle': True,
             'label': 'Web UI:',
-            'value': 'ON' if web_ui else 'OFF',
+            'value': 'ON :8000' if web_ui else 'OFF',
             'value_color': ON_COLOR if web_ui else OFF_COLOR,
-            'max_value': 'OFF',
+            'max_value': 'ON :8000',
         })
 
         items.append({'label': 'Clear Data'})
