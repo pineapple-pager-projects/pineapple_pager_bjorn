@@ -7,6 +7,7 @@ import os
 import sys
 import subprocess
 import time
+import json
 
 PAYLOAD_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -73,6 +74,14 @@ class BjornMenu:
 
     def __init__(self, interfaces):
         self.interfaces = interfaces
+        self.scan_prefix = 24
+        try:
+            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'shared_config.json')
+            with open(config_path, 'r') as f:
+                cfg = json.load(f)
+            self.scan_prefix = cfg.get('scan_network_prefix', 24)
+        except Exception:
+            pass
         self.gfx = Pager()
         self.gfx.init()
         self.gfx.set_rotation(270)  # Landscape 480x222
@@ -146,10 +155,10 @@ class BjornMenu:
         """Build the list of menu items for drawing."""
         items = [{'label': 'Start Raid'}]
 
-        # Interface selector
+        # Interface selector — show IP with configured scan prefix, not raw interface CIDR
         if self.interfaces:
             iface = self.interfaces[iface_idx]
-            iface_text = f"{iface['name']} ({iface['subnet']})"
+            iface_text = f"{iface['name']} ({iface['ip']}/{self.scan_prefix})"
         else:
             iface_text = "none"
 

@@ -133,16 +133,14 @@ class WebUtils:
                         # Skip localhost
                         if ip.startswith('127.') or current_iface == 'lo':
                             continue
-                        # Always use /24 for scanning (larger subnets take too long)
                         try:
-                            network = ipaddress.IPv4Network(f"{ip}/24", strict=False)
-                            # Get base of network (e.g., "10.0.0" from "10.0.0.0/24")
-                            net_base = '.'.join(ip.split('.')[:3])
+                            prefix = self.shared_data.scan_network_prefix
+                            network = ipaddress.IPv4Network(f"{ip}/{prefix}", strict=False)
                             networks.append({
                                 'interface': current_iface,
                                 'ip': ip,
                                 'network': str(network),
-                                'display': f"{net_base}.x ({current_iface})"
+                                'display': f"{ip}/{prefix} ({current_iface})"
                             })
                         except:
                             pass
