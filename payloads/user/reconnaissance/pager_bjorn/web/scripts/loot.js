@@ -5,6 +5,7 @@
 
 const LootTab = {
     activeSubTab: 'credentials',
+    expandedPaths: new Set(),
 
     init() {
         const panel = document.getElementById('tab-loot');
@@ -77,24 +78,26 @@ const LootTab = {
                 container.innerHTML = '<div class="empty-state">No stolen files yet.</div>';
                 return;
             }
-            container.innerHTML = '<ul class="loot-tree">' + this.renderFileTree(files) + '</ul>';
+            container.innerHTML = '<ul class="loot-tree">' + this.renderFileTree(files, 'files') + '</ul>';
+            this.restoreExpanded(container);
         } catch (e) {
             document.getElementById('loot-files').innerHTML = '<div class="empty-state">Error loading files.</div>';
         }
     },
 
-    renderFileTree(items) {
+    renderFileTree(items, prefix) {
         return items.map(item => {
             if (item.is_directory) {
                 const children = item.children || [];
                 const count = this.countFiles(children);
-                return '<li class="tree-node">' +
+                const path = prefix + '/' + item.name;
+                return '<li class="tree-node" data-path="' + path + '">' +
                     '<div class="tree-header" onclick="LootTab.toggleTree(this)">' +
                     '<span class="tree-icon">&#9654;</span>' +
                     '<span>' + item.name + '</span>' +
                     '<span class="tree-count">' + count + '</span>' +
                     '</div>' +
-                    '<div class="tree-content"><ul>' + this.renderFileTree(children) + '</ul></div>' +
+                    '<div class="tree-content"><ul>' + this.renderFileTree(children, path) + '</ul></div>' +
                     '</li>';
             } else {
                 return '<li class="tree-file">' +
@@ -114,7 +117,25 @@ const LootTab = {
     },
 
     toggleTree(el) {
-        el.closest('.tree-node').classList.toggle('expanded');
+        const node = el.closest('.tree-node');
+        node.classList.toggle('expanded');
+        const path = node.dataset.path;
+        if (path) {
+            if (node.classList.contains('expanded')) {
+                this.expandedPaths.add(path);
+            } else {
+                this.expandedPaths.delete(path);
+            }
+        }
+    },
+
+    restoreExpanded(container) {
+        if (!this.expandedPaths.size) return;
+        container.querySelectorAll('.tree-node[data-path]').forEach(node => {
+            if (this.expandedPaths.has(node.dataset.path)) {
+                node.classList.add('expanded');
+            }
+        });
     },
 
     /* --- Attack Logs --- */
@@ -132,7 +153,8 @@ const LootTab = {
 
             let html = '<ul class="loot-tree">';
             categories.forEach(cat => {
-                html += '<li class="tree-node">' +
+                var path = 'logs/' + cat.label;
+                html += '<li class="tree-node" data-path="' + path + '">' +
                     '<div class="tree-header" onclick="LootTab.toggleTree(this)">' +
                     '<span class="tree-icon">&#9654;</span>' +
                     '<span>' + cat.label + '</span>' +
@@ -149,7 +171,7 @@ const LootTab = {
             });
 
             if (uncategorized.length) {
-                html += '<li class="tree-node">' +
+                html += '<li class="tree-node" data-path="logs/Other Logs">' +
                     '<div class="tree-header" onclick="LootTab.toggleTree(this)">' +
                     '<span class="tree-icon">&#9654;</span>' +
                     '<span>Other Logs</span>' +
@@ -167,6 +189,7 @@ const LootTab = {
 
             html += '</ul>';
             container.innerHTML = html;
+            this.restoreExpanded(container);
         } catch (e) {
             document.getElementById('loot-logs').innerHTML = '<div class="empty-state">Error loading logs.</div>';
         }
