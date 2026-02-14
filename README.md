@@ -1,8 +1,6 @@
 # Pager Bjorn
 
-> **Work in Progress** - This project is still under active development and testing. The web UI is functional, all attack modules are working, and the `test_targets/` container environment is provided for testing purposes. Expect ongoing changes and stability improvements.
-
-A port of [Bjorn](https://github.com/infinition/Bjorn) - the autonomous network reconnaissance Tamagotchi - for the WiFi Pineapple Pager.
+A port/rewrite of [Bjorn](https://github.com/infinition/Bjorn) - the autonomous network reconnaissance Tamagotchi - for the WiFi Pineapple Pager.
 
 ![Bjorn on Pager](screenshot.png)
 
