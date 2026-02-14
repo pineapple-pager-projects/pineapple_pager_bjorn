@@ -231,12 +231,14 @@ while true; do
     esac
 done
 
-# Stop pager service and launch graphical menu
-/etc/init.d/pineapplepager stop 2>/dev/null
-sleep 0.3
-
 # Create data directory
 mkdir -p "$DATA_DIR" 2>/dev/null
+
+# Stop pager service and show spinner while initializing
+SPINNER_ID=$(START_SPINNER "Starting PagerBjorn...")
+/etc/init.d/pineapplepager stop 2>/dev/null
+sleep 0.5
+STOP_SPINNER "$SPINNER_ID" 2>/dev/null
 
 # Payload loop — PagerBjorn can hand off to other apps via exit code 42
 # Python writes the target launch script path to data/.next_payload
@@ -256,6 +258,12 @@ while true; do
             # Only loop back to PagerBjorn if launched app exits 42
             [ $? -eq 42 ] && continue
         fi
+    fi
+
+    # Exit code 99 = return to main menu (from pause menu)
+    # bjorn_menu.py handles this internally, but as safety net
+    if [ "$EXIT_CODE" -eq 99 ]; then
+        continue
     fi
 
     break

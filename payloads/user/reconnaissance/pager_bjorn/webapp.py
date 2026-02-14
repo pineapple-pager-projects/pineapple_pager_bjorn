@@ -67,26 +67,16 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             content = file.read()
         self.send_gzipped_response(content, content_type)
 
+    # HTML pages that should all serve the SPA index.html
+    SPA_PAGES = {'/', '/index.html', '/config.html', '/actions.html', '/network.html',
+                 '/netkb.html', '/bjorn.html', '/loot.html', '/credentials.html', '/manual.html'}
+
     def do_GET(self):
-        # Handle GET requests. Serve the HTML interface and the EPD image.
-        if self.path == '/index.html' or self.path == '/':
+        # Handle GET requests. Serve the SPA shell for all page URLs.
+        if self.path in self.SPA_PAGES:
             self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'index.html'), 'text/html')
-        elif self.path == '/config.html':
-            self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'config.html'), 'text/html')
-        elif self.path == '/actions.html':
-            self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'actions.html'), 'text/html')
-        elif self.path == '/network.html':
-            self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'network.html'), 'text/html')
-        elif self.path == '/netkb.html':
-            self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'netkb.html'), 'text/html')
-        elif self.path == '/bjorn.html':
-            self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'bjorn.html'), 'text/html')
-        elif self.path == '/loot.html':
-            self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'loot.html'), 'text/html')
-        elif self.path == '/credentials.html':
-            self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'credentials.html'), 'text/html')
-        elif self.path == '/manual.html':
-            self.serve_file_gzipped(os.path.join(self.shared_data.webdir, 'manual.html'), 'text/html')
+        elif self.path == '/api/stats':
+            self.web_utils.serve_stats(self)
         elif self.path == '/load_config':
             self.web_utils.serve_current_config(self)
         elif self.path == '/restore_default_config':
@@ -188,6 +178,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.web_utils.clear_hosts(self)
         elif self.path == '/mark_action_start':  # Mark action start time for log filtering
             self.web_utils.mark_action_start(self)
+        elif self.path == '/api/terminal':
+            self.web_utils.execute_terminal_command(self)
         else:
             self.send_response(404)
             self.end_headers()

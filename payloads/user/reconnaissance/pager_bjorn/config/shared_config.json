@@ -8,6 +8,7 @@
     "retry_success_actions": false,
     "retry_failed_actions": true,
     "blacklistcheck": true,
+    "blacklist_gateway": true,
     "displaying_csv": true,
     "log_debug": true,
     "log_info": true,
@@ -69,19 +70,8 @@
         9090,
         10000
     ],
-    "mac_scan_blacklist": [
-        "00:11:32:c4:71:9b",
-        "00:11:32:c4:71:9a",
-        "00:13:37:ad:ae:64"
-    ],
-    "ip_scan_blacklist": [
-        "192.168.1.1",
-        "192.168.1.12",
-        "192.168.1.38",
-        "192.168.1.53",
-        "192.168.1.40",
-        "192.168.1.29"
-    ],
+    "mac_scan_blacklist": [],
+    "ip_scan_blacklist": [],
     "steal_file_names": [
         "ssh.csv",
         "hack.txt",

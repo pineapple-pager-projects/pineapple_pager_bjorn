@@ -257,13 +257,40 @@ class WebUtils:
                         return ports
                 return []
 
+            # Build full host data for Network and Attacks tabs
+            # Include MAC, hostname, alive, ports, and all action results per host
+            action_columns = [
+                'SSHBruteforce', 'FTPBruteforce', 'TelnetBruteforce',
+                'SMBBruteforce', 'RDPBruteforce', 'SQLBruteforce',
+                'StealFilesSSH', 'StealFilesFTP', 'StealFilesTelnet',
+                'StealFilesSMB', 'StealFilesRDP', 'StealDataSQL',
+                'NmapVulnScanner'
+            ]
+            hosts = []
+            for row in data:
+                ip = row.get('IPs', row.get('IP Address', ''))
+                actions_data = {}
+                for col in action_columns:
+                    val = row.get(col, '')
+                    if val:
+                        actions_data[col] = val
+                hosts.append({
+                    'mac': row.get('MAC Address', ''),
+                    'ip': ip,
+                    'hostname': row.get('Hostnames', ''),
+                    'alive': row.get('Alive', ''),
+                    'ports': row.get('Ports', ''),
+                    'actions': actions_data
+                })
+
             response_data = {
                 'ips': [row.get('IPs', row.get('IP Address', '')) for row in data],
                 'ports': {row.get('IPs', row.get('IP Address', '')): get_ports_from_row(row) for row in data},
                 'actions': valid_actions,
                 'action_ports': action_ports,  # Map action -> port
                 'port_to_actions': port_to_actions,  # Map port -> [actions] for auto-select
-                'action_display_names': action_display_names  # Friendly names
+                'action_display_names': action_display_names,  # Friendly names
+                'hosts': hosts  # Full host data for Network/Attacks tabs
             }
 
             handler.send_response(200)
@@ -520,6 +547,98 @@ class WebUtils:
             handler.send_header("Content-type", "application/json")
             handler.end_headers()
             handler.wfile.write(json.dumps({"status": "success", "start_time": self.shared_data.action_start_time}).encode('utf-8'))
+        except Exception as e:
+            handler.send_response(500)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+
+    def serve_stats(self, handler):
+        """Serve dashboard stats from shared_data — zero computation, just reads attributes."""
+        try:
+            sd = self.shared_data
+            stats = {
+                'targetnbr': getattr(sd, 'targetnbr', 0),
+                'portnbr': getattr(sd, 'portnbr', 0),
+                'vulnnbr': getattr(sd, 'vulnnbr', 0),
+                'crednbr': getattr(sd, 'crednbr', 0),
+                'datanbr': getattr(sd, 'datanbr', 0),
+                'zombiesnbr': getattr(sd, 'zombiesnbr', 0),
+                'coinnbr': getattr(sd, 'coinnbr', 0),
+                'levelnbr': getattr(sd, 'levelnbr', 0),
+                'networkkbnbr': getattr(sd, 'networkkbnbr', 0),
+                'attacksnbr': getattr(sd, 'attacksnbr', 0),
+                'bjornorch_status': getattr(sd, 'bjornorch_status', 'IDLE'),
+                'bjornstatustext': getattr(sd, 'bjornstatustext', 'IDLE'),
+                'bjornstatustext2': getattr(sd, 'bjornstatustext2', ''),
+                'manual_mode': getattr(sd, 'manual_mode', False),
+                'orchestrator_should_exit': getattr(sd, 'orchestrator_should_exit', False),
+            }
+            handler.send_response(200)
+            handler.send_header("Content-type", "application/json")
+            handler.send_header("Cache-Control", "no-cache")
+            handler.end_headers()
+            handler.wfile.write(json.dumps(stats).encode('utf-8'))
+        except Exception as e:
+            handler.send_response(500)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+
+    def execute_terminal_command(self, handler):
+        """Execute a command via subprocess and return output. Basic blocklist for dangerous patterns."""
+        try:
+            content_length = int(handler.headers['Content-Length'])
+            post_data = handler.rfile.read(content_length).decode('utf-8')
+            params = json.loads(post_data)
+            command = params.get('command', '').strip()
+
+            if not command:
+                handler.send_response(400)
+                handler.send_header("Content-type", "application/json")
+                handler.end_headers()
+                handler.wfile.write(json.dumps({"error": "No command provided"}).encode('utf-8'))
+                return
+
+            # Block catastrophic commands
+            blocked = ['rm -rf /', 'mkfs', 'dd if=/dev/zero', 'dd if=/dev/random',
+                       '> /dev/sda', 'chmod -R 777 /', 'fork bomb']
+            cmd_lower = command.lower()
+            for pattern in blocked:
+                if pattern in cmd_lower:
+                    handler.send_response(403)
+                    handler.send_header("Content-type", "application/json")
+                    handler.end_headers()
+                    handler.wfile.write(json.dumps({
+                        "command": command, "output": "Command blocked for safety.", "exit_code": -1
+                    }).encode('utf-8'))
+                    return
+
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True, timeout=30,
+                cwd=self.shared_data.datadir
+            )
+            output = result.stdout
+            if result.stderr:
+                output += result.stderr
+
+            handler.send_response(200)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({
+                "command": command,
+                "output": output,
+                "exit_code": result.returncode
+            }).encode('utf-8'))
+        except subprocess.TimeoutExpired:
+            handler.send_response(200)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({
+                "command": command,
+                "output": "Command timed out (30s limit).",
+                "exit_code": -1
+            }).encode('utf-8'))
         except Exception as e:
             handler.send_response(500)
             handler.send_header("Content-type", "application/json")
@@ -810,22 +929,41 @@ class WebUtils:
         handler.wfile.write(json.dumps(self.shared_data.config).encode('utf-8'))
 
     def serve_image(self, handler):
-        image_path = os.path.join(self.shared_data.webdir, 'screen.png')
+        """Serve raw RGB565 framebuffer data for client-side rendering."""
         try:
-            with open(image_path, 'rb') as file:
-                handler.send_response(200)
-                handler.send_header("Content-type", "image/png")
-                handler.send_header("Cache-Control", "max-age=0, must-revalidate")
-                handler.end_headers()
-                handler.wfile.write(file.read())
-        except FileNotFoundError:
-            handler.send_response(404)
+            fb_path = '/dev/fb0'
+            fb_size = 222 * 480 * 2  # RGB565 = 2 bytes/pixel
+
+            with open(fb_path, 'rb') as fb:
+                raw = fb.read(fb_size)
+
+            handler.send_response(200)
+            handler.send_header("Content-type", "application/octet-stream")
+            handler.send_header("Content-Length", str(len(raw)))
+            handler.send_header("Cache-Control", "no-cache, no-store")
+            handler.send_header("X-FB-Width", "222")
+            handler.send_header("X-FB-Height", "480")
             handler.end_headers()
+            handler.wfile.write(raw)
+        except FileNotFoundError:
+            # No framebuffer (not on pager) - try static fallback
+            image_path = os.path.join(self.shared_data.webdir, 'screen.png')
+            try:
+                with open(image_path, 'rb') as file:
+                    data = file.read()
+                    handler.send_response(200)
+                    handler.send_header("Content-type", "image/png")
+                    handler.end_headers()
+                    handler.wfile.write(data)
+            except FileNotFoundError:
+                handler.send_response(404)
+                handler.end_headers()
         except BrokenPipeError:
-            # Ignore broken pipe errors
             pass
         except Exception as e:
-            self.logger.error(f"Unexpected error: {e}")
+            self.logger.error(f"Screenshot error: {e}")
+            handler.send_response(500)
+            handler.end_headers()
 
 
     def serve_favicon(self, handler):

@@ -2,10 +2,10 @@
     "name": "Bjorn Cyberviking",
     "short_name": "Bjorn",
     "description": "Bjorn Cyberviking",
-    "start_url": "/index.html",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#333",
-    "theme_color": "#333",
+    "background_color": "#1a1510",
+    "theme_color": "#e99f00",
     "icons": [
       {
         "src": "images/icon-60x60.png",
@@ -54,4 +54,3 @@
       }
     ]
   }
-  

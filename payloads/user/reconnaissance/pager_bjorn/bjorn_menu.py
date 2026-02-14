@@ -338,25 +338,37 @@ class BjornMenu:
 
     def _clear_all(self):
         """Clear all Bjorn data."""
+        # Each step independent so one failure doesn't skip the rest
         try:
             subprocess.run(['rm', '-rf', LOGS_DIR], timeout=5)
             os.makedirs(LOGS_DIR, exist_ok=True)
+        except Exception:
+            pass
+        try:
             for f in os.listdir(CREDS_DIR):
                 if f.endswith('.csv'):
                     os.remove(os.path.join(CREDS_DIR, f))
+        except Exception:
+            pass
+        try:
             subprocess.run(['rm', '-rf', STOLEN_DIR], timeout=5)
             os.makedirs(STOLEN_DIR, exist_ok=True)
-            # Also clear scan results, vulnerabilities, and status files
-            for name in ['netkb.csv', 'livestatus.csv']:
+        except Exception:
+            pass
+        for name in ['netkb.csv', 'livestatus.csv']:
+            try:
                 path = os.path.join(LOOT_DIR, name)
                 if os.path.exists(path):
                     os.remove(path)
-            for subdir in ['output/scan_results', 'output/vulnerabilities', 'zombies']:
+            except Exception:
+                pass
+        for subdir in ['output/scan_results', 'output/vulnerabilities', 'output/zombies', 'archives']:
+            try:
                 path = os.path.join(LOOT_DIR, subdir)
                 subprocess.run(['rm', '-rf', path], timeout=5)
                 os.makedirs(path, exist_ok=True)
-        except Exception:
-            pass
+            except Exception:
+                pass
         self._show_message("All Data Cleared!", ON_COLOR)
         time.sleep(0.5)
 
@@ -367,15 +379,33 @@ def main():
     try:
         while True:
             interfaces = detect_interfaces()
-            menu = BjornMenu(interfaces)
+
+            # Give pagerctl time to release after Bjorn's os._exit()
+            time.sleep(0.3)
+
+            try:
+                menu = BjornMenu(interfaces)
+            except Exception as e:
+                # Pagerctl init can fail after unclean exit - retry once
+                time.sleep(1)
+                try:
+                    menu = BjornMenu(interfaces)
+                except Exception:
+                    sys.stderr.write(f"Failed to init display: {e}\n")
+                    break
 
             result = menu.show_main_menu()
-            menu.cleanup()
-            menu = None
 
             if result is None:
                 # Exit selected
+                menu.cleanup()
+                menu = None
                 break
+
+            # Show loading spinner before handing off to Bjorn
+            menu._show_message("Starting Bjorn...", TITLE_COLOR, result['interface'] + " " + result['ip'], DIM_COLOR)
+            menu.cleanup()
+            menu = None
 
             # Launch Bjorn as subprocess
             env = os.environ.copy()
@@ -403,6 +433,8 @@ def main():
             break
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        sys.stderr.write(f"Menu error: {e}\n")
     finally:
         if menu:
             menu.cleanup()

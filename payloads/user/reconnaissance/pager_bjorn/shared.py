@@ -125,6 +125,7 @@ class SharedData:
             "retry_success_actions": False,
             "retry_failed_actions": True,
             "blacklistcheck": True,
+            "blacklist_gateway": True,
             "displaying_csv": True,
             "log_debug": True,
             "log_info": True,
@@ -202,6 +203,36 @@ class SharedData:
                 if ip not in self.config['ip_scan_blacklist']:
                     self.config['ip_scan_blacklist'].append(ip)
                     logger.info(f"Added local IP address {ip} to blacklist")
+
+        # Auto-blacklist the default gateway (don't attack the router we're connected through)
+        if self.config.get('blacklist_gateway', True):
+            gateway_ip = self.get_gateway_ip()
+            if gateway_ip:
+                if 'ip_scan_blacklist' not in self.config:
+                    self.config['ip_scan_blacklist'] = []
+                if gateway_ip not in self.config['ip_scan_blacklist']:
+                    self.config['ip_scan_blacklist'].append(gateway_ip)
+                    logger.info(f"Added gateway IP {gateway_ip} to blacklist")
+                else:
+                    logger.debug(f"Gateway IP {gateway_ip} already in blacklist")
+            else:
+                logger.warning("Could not detect gateway IP for blacklist")
+        else:
+            logger.info("Gateway blacklisting disabled by config")
+
+    def get_gateway_ip(self):
+        """Get the default gateway IP address."""
+        try:
+            result = subprocess.run(['ip', 'route', 'show', 'default'],
+                                    capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                parts = result.stdout.strip().split()
+                if 'via' in parts:
+                    return parts[parts.index('via') + 1]
+            return None
+        except Exception as e:
+            logger.error(f"Error getting gateway IP: {e}")
+            return None
 
     def get_device_mac(self):
         """Get the MAC address of the primary network interface."""

@@ -1,205 +1,176 @@
-let fontSize = 14;
-// Adjust font size based on device type
-if (/Mobi|Android/i.test(navigator.userAgent)) {
-    fontSize = 7; // size for mobile
-}
+/* ========================================
+   Loot Tab - Credentials + Files + Logs
+   ======================================== */
+'use strict';
 
-// Track expanded sections to preserve state during updates
-let expandedSections = new Set();
+const LootTab = {
+    activeSubTab: 'credentials',
 
-function saveExpandedState() {
-    // Find all expanded sections and save their IDs
-    document.querySelectorAll('.tree-content').forEach(el => {
-        if (el.style.display !== 'none') {
-            expandedSections.add(el.id);
-        }
-    });
-}
-
-function restoreExpandedState() {
-    // Restore expanded state for all saved sections
-    expandedSections.forEach(id => {
-        const content = document.getElementById(id);
-        const iconId = id.replace('content-', 'icon-');
-        const icon = document.getElementById(iconId);
-        if (content) {
-            content.style.display = 'block';
-            if (icon) icon.textContent = '▼';
-        }
-    });
-}
-
-function fetchFiles() {
-    saveExpandedState();
-    fetch('/list_files')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('file-list').innerHTML = generateFileTreeHTML(data, "/", 0);
-            restoreExpandedState();
-        })
-        .catch(error => {
-            console.error('Error fetching files:', error);
-        });
-}
-
-function fetchLogs() {
-    saveExpandedState();
-    fetch('/list_logs')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('log-list').innerHTML = generateLogTreeHTML(data);
-            restoreExpandedState();
-        })
-        .catch(error => {
-            console.error('Error fetching logs:', error);
-        });
-}
-
-function toggleSection(sectionId) {
-    const content = document.getElementById('content-' + sectionId);
-    const icon = document.getElementById('icon-' + sectionId);
-    if (content.style.display === 'none') {
-        content.style.display = 'block';
-        icon.textContent = '▼';
-        expandedSections.add('content-' + sectionId);
-    } else {
-        content.style.display = 'none';
-        icon.textContent = '▶';
-        expandedSections.delete('content-' + sectionId);
-    }
-}
-
-function generateLogTreeHTML(data) {
-    if (!data || (!data.categories.length && !data.uncategorized.length)) {
-        return '<p style="color: #888;">No log files found.</p>';
-    }
-
-    let html = '<ul class="loot-tree">';
-
-    // Render categories
-    data.categories.forEach((cat, idx) => {
-        const catId = 'log-' + cat.id;
-        html += `
-            <li class="tree-node">
-                <div class="tree-header" onclick="toggleSection('${catId}')">
-                    <span id="icon-${catId}" class="tree-icon">▶</span>
-                    <img src="web/images/subfolder.png" alt="Category" style="height: 18px; margin-right: 5px;">
-                    <strong>${cat.label}</strong>
-                    <span class="tree-count">(${cat.logs.length})</span>
+    init() {
+        const panel = document.getElementById('tab-loot');
+        panel.innerHTML = `
+            <div class="loot-panel">
+                <div class="sub-tabs">
+                    <button class="sub-tab active" data-sub="credentials">Credentials</button>
+                    <button class="sub-tab" data-sub="files">Stolen Files</button>
+                    <button class="sub-tab" data-sub="logs">Attack Logs</button>
                 </div>
-                <div id="content-${catId}" class="tree-content" style="display: none;">
-                    <ul>`;
-        cat.logs.forEach(log => {
-            html += `
-                        <li class="tree-file">
-                            <img src="web/images/file.png" alt="Log" style="height: 16px;">
-                            <a href="/download_log?name=${encodeURIComponent(log.name)}">${log.name}</a>
-                            <span class="file-size">(${log.size})</span>
-                        </li>`;
+                <div id="loot-credentials" class="sub-panel active"></div>
+                <div id="loot-files" class="sub-panel"></div>
+                <div id="loot-logs" class="sub-panel"></div>
+            </div>
+        `;
+
+        panel.querySelectorAll('.sub-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                panel.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+                panel.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('loot-' + btn.dataset.sub).classList.add('active');
+                this.activeSubTab = btn.dataset.sub;
+                this.refresh();
+            });
         });
-        html += `
-                    </ul>
-                </div>
-            </li>`;
-    });
+    },
 
-    // Render uncategorized logs
-    if (data.uncategorized && data.uncategorized.length > 0) {
-        const catId = 'log-other';
-        html += `
-            <li class="tree-node">
-                <div class="tree-header" onclick="toggleSection('${catId}')">
-                    <span id="icon-${catId}" class="tree-icon">▶</span>
-                    <img src="web/images/subfolder.png" alt="Category" style="height: 18px; margin-right: 5px;">
-                    <strong>Other Logs</strong>
-                    <span class="tree-count">(${data.uncategorized.length})</span>
-                </div>
-                <div id="content-${catId}" class="tree-content" style="display: none;">
-                    <ul>`;
-        data.uncategorized.forEach(log => {
-            html += `
-                        <li class="tree-file">
-                            <img src="web/images/file.png" alt="Log" style="height: 16px;">
-                            <a href="/download_log?name=${encodeURIComponent(log.name)}">${log.name}</a>
-                            <span class="file-size">(${log.size})</span>
-                        </li>`;
+    activate() {
+        App.startPolling('loot', () => this.refresh(), 10000);
+    },
+
+    deactivate() {
+        App.stopPolling('loot');
+    },
+
+    async refresh() {
+        switch (this.activeSubTab) {
+            case 'credentials': return this.loadCredentials();
+            case 'files': return this.loadFiles();
+            case 'logs': return this.loadLogs();
+        }
+    },
+
+    /* --- Credentials --- */
+    async loadCredentials() {
+        try {
+            const html = await App.api('/list_credentials');
+            const container = document.getElementById('loot-credentials');
+            if (!html || html.trim() === '<div class="credentials-container">\n</div>\n') {
+                container.innerHTML = '<div class="empty-state">No credentials found yet.</div>';
+                return;
+            }
+            // Restyle the server-rendered HTML with our new table classes
+            container.innerHTML = html.replace(/class="styled-table/g, 'class="data-table')
+                                      .replace(/<h2>/g, '<div class="cred-section"><h3>')
+                                      .replace(/<\/h2>/g, '</h3>')
+                                      .replace(/<\/table>/g, '</table></div>');
+        } catch (e) {
+            document.getElementById('loot-credentials').innerHTML = '<div class="empty-state">Error loading credentials.</div>';
+        }
+    },
+
+    /* --- Stolen Files --- */
+    async loadFiles() {
+        try {
+            const files = await App.api('/list_files');
+            const container = document.getElementById('loot-files');
+            if (!files || !files.length) {
+                container.innerHTML = '<div class="empty-state">No stolen files yet.</div>';
+                return;
+            }
+            container.innerHTML = '<ul class="loot-tree">' + this.renderFileTree(files) + '</ul>';
+        } catch (e) {
+            document.getElementById('loot-files').innerHTML = '<div class="empty-state">Error loading files.</div>';
+        }
+    },
+
+    renderFileTree(items) {
+        return items.map(item => {
+            if (item.is_directory) {
+                const children = item.children || [];
+                const count = this.countFiles(children);
+                return '<li class="tree-node">' +
+                    '<div class="tree-header" onclick="LootTab.toggleTree(this)">' +
+                    '<span class="tree-icon">&#9654;</span>' +
+                    '<span>' + item.name + '</span>' +
+                    '<span class="tree-count">' + count + '</span>' +
+                    '</div>' +
+                    '<div class="tree-content"><ul>' + this.renderFileTree(children) + '</ul></div>' +
+                    '</li>';
+            } else {
+                return '<li class="tree-file">' +
+                    '<a href="/download_file?path=' + encodeURIComponent(item.path) + '" title="Download">' + item.name + '</a>' +
+                    '</li>';
+            }
+        }).join('');
+    },
+
+    countFiles(items) {
+        let c = 0;
+        items.forEach(i => {
+            if (i.is_directory) c += this.countFiles(i.children || []);
+            else c++;
         });
-        html += `
-                    </ul>
-                </div>
-            </li>`;
-    }
+        return c;
+    },
 
-    html += '</ul>';
-    return html;
-}
+    toggleTree(el) {
+        el.closest('.tree-node').classList.toggle('expanded');
+    },
 
-function generateFileTreeHTML(files, path, indent) {
-    if (!files || files.length === 0) {
-        if (indent === 0) {
-            return '<p style="color: #888;">No stolen data found.</p>';
+    /* --- Attack Logs --- */
+    async loadLogs() {
+        try {
+            const data = await App.api('/list_logs');
+            const container = document.getElementById('loot-logs');
+            const categories = data.categories || [];
+            const uncategorized = data.uncategorized || [];
+
+            if (!categories.length && !uncategorized.length) {
+                container.innerHTML = '<div class="empty-state">No log files yet.</div>';
+                return;
+            }
+
+            let html = '<ul class="loot-tree">';
+            categories.forEach(cat => {
+                html += '<li class="tree-node">' +
+                    '<div class="tree-header" onclick="LootTab.toggleTree(this)">' +
+                    '<span class="tree-icon">&#9654;</span>' +
+                    '<span>' + cat.label + '</span>' +
+                    '<span class="tree-count">' + cat.logs.length + '</span>' +
+                    '</div>' +
+                    '<div class="tree-content"><ul>';
+                cat.logs.forEach(log => {
+                    html += '<li class="tree-file">' +
+                        '<a href="/download_log?name=' + encodeURIComponent(log.name) + '" title="Download">' + log.name + '</a>' +
+                        '<span class="file-size">' + log.size + '</span>' +
+                        '</li>';
+                });
+                html += '</ul></div></li>';
+            });
+
+            if (uncategorized.length) {
+                html += '<li class="tree-node">' +
+                    '<div class="tree-header" onclick="LootTab.toggleTree(this)">' +
+                    '<span class="tree-icon">&#9654;</span>' +
+                    '<span>Other Logs</span>' +
+                    '<span class="tree-count">' + uncategorized.length + '</span>' +
+                    '</div>' +
+                    '<div class="tree-content"><ul>';
+                uncategorized.forEach(log => {
+                    html += '<li class="tree-file">' +
+                        '<a href="/download_log?name=' + encodeURIComponent(log.name) + '" title="Download">' + log.name + '</a>' +
+                        '<span class="file-size">' + log.size + '</span>' +
+                        '</li>';
+                });
+                html += '</ul></div></li>';
+            }
+
+            html += '</ul>';
+            container.innerHTML = html;
+        } catch (e) {
+            document.getElementById('loot-logs').innerHTML = '<div class="empty-state">Error loading logs.</div>';
         }
-        return '';
     }
+};
 
-    let html = '<ul class="loot-tree">';
-    files.forEach((file, idx) => {
-        if (file.is_directory) {
-            const nodeId = 'file-' + path.replace(/[^a-zA-Z0-9]/g, '-') + '-' + idx;
-            const icon = path === "/" ? "web/images/mainfolder.png" : "web/images/subfolder.png";
-            const childCount = file.children ? file.children.length : 0;
-            html += `
-                <li class="tree-node" style="margin-left: ${indent * 10}px;">
-                    <div class="tree-header" onclick="toggleSection('${nodeId}')">
-                        <span id="icon-${nodeId}" class="tree-icon">▶</span>
-                        <img src="${icon}" alt="Folder" style="height: 18px; margin-right: 5px;">
-                        <strong>${file.name}</strong>
-                        <span class="tree-count">(${childCount})</span>
-                    </div>
-                    <div id="content-${nodeId}" class="tree-content" style="display: none;">
-                        ${generateFileTreeHTML(file.children || [], path + '/' + file.name, indent + 1)}
-                    </div>
-                </li>`;
-        } else {
-            html += `
-                <li class="tree-file" style="margin-left: ${indent * 10}px;">
-                    <img src="web/images/file.png" alt="File" style="height: 16px;">
-                    <a href="/download_file?path=${encodeURIComponent(file.path)}">${file.name}</a>
-                </li>`;
-        }
-    });
-    html += '</ul>';
-    return html;
-}
-
-function adjustLootFontSize(change) {
-    fontSize += change;
-    document.getElementById('file-list').style.fontSize = fontSize + 'px';
-    document.getElementById('log-list').style.fontSize = fontSize + 'px';
-}
-
-function toggleLootToolbar() {
-    const mainToolbar = document.querySelector('.toolbar');
-    const toggleButton = document.getElementById('toggle-toolbar');
-    const toggleIcon = document.getElementById('toggle-icon');
-    if (mainToolbar.classList.contains('hidden')) {
-        mainToolbar.classList.remove('hidden');
-        toggleIcon.src = '/web/images/hide.png';
-        toggleButton.setAttribute('data-open', 'false');
-    } else {
-        mainToolbar.classList.add('hidden');
-        toggleIcon.src = '/web/images/reveal.png';
-        toggleButton.setAttribute('data-open', 'true');
-    }
-}
-
-document.addEventListener("DOMContentLoaded", function() {
-    fetchFiles();
-    fetchLogs();
-
-    // Refresh files and logs every 10 seconds
-    setInterval(() => {
-        fetchFiles();
-        fetchLogs();
-    }, 10000);
-});
+App.registerTab('loot', LootTab);
