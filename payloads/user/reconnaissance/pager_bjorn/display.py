@@ -426,7 +426,7 @@ class Display:
         def draw_menu():
             self.pager.fill_rect(0, 0, self.width, self.height, self.BG_COLOR)
 
-            box_y = int(self.height * 0.10)
+            box_y = int(self.height * 0.10) - 3
             box_h = int(self.height * 0.80)
             self.pager.fill_rect(10, box_y, self.width - 20, box_h, self.BG_COLOR)
 
@@ -541,14 +541,14 @@ class Display:
             # Title
             title_fs = 26
             title_w = self.pager.ttf_width("MENU", self.font_viking, title_fs)
-            self.pager.draw_ttf((self.width - title_w) // 2, 16, "MENU", self.TEXT_COLOR, self.font_viking, title_fs)
+            self.pager.draw_ttf((self.width - title_w) // 2, 13, "MENU", self.TEXT_COLOR, self.font_viking, title_fs)
 
             # Brightness section
             lbl_fs = 16
             lbl_w = self.pager.ttf_width("BRIGHTNESS", self.font_arial, lbl_fs)
-            self.pager.draw_ttf((self.width - lbl_w) // 2, 46, "BRIGHTNESS", self.TEXT_COLOR, self.font_arial, lbl_fs)
+            self.pager.draw_ttf((self.width - lbl_w) // 2, 43, "BRIGHTNESS", self.TEXT_COLOR, self.font_arial, lbl_fs)
 
-            bar_y = 66
+            bar_y = 63
             bar_x = 40
             bar_w = self.width - 80
             bar_h = 16
@@ -560,7 +560,7 @@ class Display:
             pct_text = f"{current_brightness}%"
             pct_fs = 16
             pct_w = self.pager.ttf_width(pct_text, self.font_arial, pct_fs)
-            self.pager.draw_ttf((self.width - pct_w) // 2, 86, pct_text, self.TEXT_COLOR, self.font_arial, pct_fs)
+            self.pager.draw_ttf((self.width - pct_w) // 2, 83, pct_text, self.TEXT_COLOR, self.font_arial, pct_fs)
 
             # Menu buttons - vertical stack
             btn_w = 200
@@ -568,7 +568,7 @@ class Display:
             btn_x = (self.width - btn_w) // 2
             btn_gap = 8
             font_size = 18
-            first_btn_y = 112
+            first_btn_y = 109
 
             for i, (label, color, _action) in enumerate(options):
                 btn_y = first_btn_y + i * (btn_h + btn_gap)
@@ -852,7 +852,7 @@ class Display:
             btw = self.pager.ttf_width(bat_text, self.font_arial, bat_fs)
             bth = self.pager.ttf_height(self.font_arial, bat_fs)
             bt_x = icon_x + (icon_w - btw) // 2
-            bt_y = icon_y + (icon_h - bth) // 2
+            bt_y = icon_y + (icon_h - bth) // 2 + 3
             bat_color = self.ACCENT_COLOR if self.shared_data.battery_charging else self.TEXT_COLOR
             self.pager.draw_ttf(bt_x, bt_y, bat_text, bat_color, self.font_arial, bat_fs)
 
