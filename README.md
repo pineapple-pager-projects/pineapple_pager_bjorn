@@ -2,7 +2,7 @@
   <img src="bjorn-themes.png" width="500" alt="Bjorn - Payload for the Hak5 WiFi Pineapple Pager - Now With Theme Support">
 </p>
 
-A port/rewrite of [Bjorn](https://github.com/infinition/Bjorn) - the autonomous network reconnaissance Tamagotchi - for the WiFi Pineapple Pager.
+A port/rewrite of [Bjorn](https://github.com/infinition/Bjorn) originally by infinition - the autonomous network reconnaissance Tamagotchi - for the WiFi Pineapple Pager.
 
 <p align="center">
   <img src="screenshots/01-pager-display-bjorn-ssh.png" width="160" alt="Bjorn SSH Attack">
