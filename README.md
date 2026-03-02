@@ -344,19 +344,19 @@ Bjorn supports a theme system that lets you customize the display name, fonts, c
 | `pirate` | Cap'n Plndr pirate theme with seafaring personality and nautical commentary |
 | `knight` | Sir Haxalot medieval knight theme with chivalric personality |
 
-#### ClownSec
+#### ClownSec — by brAinphreAk
 
 | | | | |
 |---|---|---|---|
 | ![ClownSec 1](payloads/user/reconnaissance/pager_bjorn/themes/screenshots/clownsec-1.png) | ![ClownSec 2](payloads/user/reconnaissance/pager_bjorn/themes/screenshots/clownsec-2.png) | ![ClownSec 3](payloads/user/reconnaissance/pager_bjorn/themes/screenshots/clownsec-3.png) | ![ClownSec 4](payloads/user/reconnaissance/pager_bjorn/themes/screenshots/clownsec-4.png) |
 
-#### Sir Haxalot (Knight)
+#### Sir Haxalot (Knight) — by Zombie Joe
 
 | | | | |
 |---|---|---|---|
 | ![Knight 1](payloads/user/reconnaissance/pager_bjorn/themes/screenshots/knight-1.png) | ![Knight 2](payloads/user/reconnaissance/pager_bjorn/themes/screenshots/knight-2.png) | ![Knight 3](payloads/user/reconnaissance/pager_bjorn/themes/screenshots/knight-3.png) | ![Knight 4](payloads/user/reconnaissance/pager_bjorn/themes/screenshots/knight-4.png) |
 
-#### Cap'n Plndr (Pirate)
+#### Cap'n Plndr (Pirate) — by brAinphreAk
 
 | | | | |
 |---|---|---|---|
