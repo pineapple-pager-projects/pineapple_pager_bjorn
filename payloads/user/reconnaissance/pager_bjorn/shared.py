@@ -288,6 +288,70 @@ class SharedData:
             logger.error(f"Error getting device IPs: {e}")
             return []
 
+    @staticmethod
+    def get_battery_level():
+        """Get battery percentage (0-100) or None if unavailable."""
+        import glob as _glob
+
+        # Method 1: Standard Linux sysfs interface
+        try:
+            for bat_path in _glob.glob('/sys/class/power_supply/*/capacity'):
+                with open(bat_path, 'r') as f:
+                    return int(f.read().strip())
+        except Exception:
+            pass
+
+        # Method 2: ubus (OpenWRT/Pineapple)
+        try:
+            result = subprocess.run(
+                ['ubus', 'call', 'battery', 'info'],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                if 'percent' in data:
+                    return int(data['percent'])
+                if 'capacity' in data:
+                    return int(data['capacity'])
+        except Exception:
+            pass
+
+        # Method 3: /tmp files (some devices write battery here)
+        try:
+            for path in ['/tmp/battery', '/tmp/battery_percent', '/var/battery']:
+                if os.path.exists(path):
+                    with open(path, 'r') as f:
+                        return int(f.read().strip())
+        except Exception:
+            pass
+
+        # Method 4: Pineapple-specific platform paths
+        try:
+            for path in ['/sys/devices/platform/battery/capacity',
+                         '/sys/devices/platform/axp20x-battery-power-supply/capacity']:
+                if os.path.exists(path):
+                    with open(path, 'r') as f:
+                        return int(f.read().strip())
+        except Exception:
+            pass
+
+        return None
+
+    @staticmethod
+    def get_battery_charging():
+        """Check if battery is charging. Returns True/False/None."""
+        import glob as _glob
+
+        try:
+            for status_path in _glob.glob('/sys/class/power_supply/*/status'):
+                with open(status_path, 'r') as f:
+                    status = f.read().strip().lower()
+                    return status in ('charging', 'full')
+        except Exception:
+            pass
+
+        return None
+
     def setup_environment(self):
         """Setup the environment with the necessary directories and files."""
         self.save_config()
@@ -357,6 +421,10 @@ class SharedData:
         self.networkkbnbr = 0
         self.attacksnbr = 0
         self.show_first_image = True
+
+        # Battery state
+        self.battery_level = None
+        self.battery_charging = None
 
         # Current image for animation
         self.imagegen = None
@@ -677,7 +745,8 @@ class SharedData:
             # Static image paths
             self.static_images = {}
             static_names = ['target', 'port', 'vuln', 'cred', 'zombie', 'data',
-                          'frise', 'gold', 'level', 'networkkb', 'attacks']
+                          'frise', 'gold', 'level', 'networkkb', 'attacks',
+                          'battery']
 
             for name in static_names:
                 path = self._find_image(self.staticpicdir, name)
@@ -743,6 +812,7 @@ class SharedData:
         self.theme_layout_landscape = {}
         self.theme_title_font_color = None
         self.theme_title_font_size = None
+        self.theme_title_y_offset = 0
 
         # Load theme.json if the theme directory exists
         theme_json_path = os.path.join(theme_dir, "theme.json")
@@ -766,6 +836,7 @@ class SharedData:
                 self.theme_comment_delaymax = theme_data.get("comment_delaymax", None)
                 self.theme_title_font_color = theme_data.get("title_font_color", None)
                 self.theme_title_font_size = theme_data.get("title_font_size", None)
+                self.theme_title_y_offset = theme_data.get("title_y_offset", 0)
                 logger.info(f"Loaded theme '{theme_name}': display_name='{self.display_name}'")
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Error reading theme.json for '{theme_name}': {e}")

@@ -37,6 +37,7 @@ Bjorn is a Tamagotchi-style autonomous network reconnaissance companion. It auto
 - **SQL Data Theft** - Dumps database tables from MySQL servers
 - **Web Interface** - Real-time log viewer and control panel at `http://<pager-ip>:8000`
 - **LCD Display** - Status updates on the Pager's full color screen with auto-dim for battery saving
+- **Battery Indicator** - Real-time battery percentage in the header with charging state, auto-hides when unavailable
 
 ## Supported Protocols
 
@@ -365,6 +366,7 @@ themes/
       title.TTF              # Custom title font
     images/
       frise.bmp              # Divider bar image
+      battery.png            # Battery indicator icon (displayed in header)
       target.bmp             # Stats icons (target, port, vuln, cred, etc.)
       ...
       status/                # Character animations per action
@@ -412,6 +414,7 @@ themes/
 | `image_display_delaymax` | Maximum seconds between animation frame changes (overrides global config) |
 | `comment_delaymin` | Minimum seconds between LCD comment updates (overrides global config) |
 | `comment_delaymax` | Maximum seconds between LCD comment updates (overrides global config) |
+| `title_y_offset` | Pixel offset to nudge the header title up (negative) or down (positive) for vertical centering with custom fonts |
 
 The four delay fields are optional. When provided, they override the global config values for that theme. To force the global config values to take effect regardless of theme settings, enable the **Override Theme Animation Delays** toggle (`override_theme_delays`) in the web UI Config tab.
 

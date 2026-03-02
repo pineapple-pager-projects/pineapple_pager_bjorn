@@ -216,6 +216,7 @@ class Display:
         self.manual_mode_txt = "M" if self.shared_data.manual_mode else "A"
         self.last_led_status = None
         self.dialog_showing = False  # Flag to pause display updates during dialogs
+        self._cleaned_up = False
 
         # Brightness/dim settings
         self.screen_brightness = getattr(self.shared_data, 'screen_brightness', 80)
@@ -267,6 +268,7 @@ class Display:
         threading.Thread(target=self.schedule_update_shared_data, daemon=True).start()
         threading.Thread(target=self.schedule_update_vuln_count, daemon=True).start()
         threading.Thread(target=self.handle_input_loop, daemon=True).start()
+        threading.Thread(target=self.poll_battery, daemon=True).start()
 
     def update_main_image(self):
         while not self.shared_data.display_should_exit:
@@ -292,6 +294,16 @@ class Display:
     def schedule_update_vuln_count(self):
         while not self.shared_data.display_should_exit:
             self.update_vuln_count()
+            time.sleep(30)
+
+    def poll_battery(self):
+        """Poll battery level and charging status every 30 seconds."""
+        while not self.shared_data.display_should_exit:
+            try:
+                self.shared_data.battery_level = self.shared_data.get_battery_level()
+                self.shared_data.battery_charging = self.shared_data.get_battery_charging()
+            except Exception as e:
+                logger.debug(f"Battery poll error: {e}")
             time.sleep(30)
 
     # ------------------------------------------------------------------
@@ -797,7 +809,7 @@ class Display:
     # ------------------------------------------------------------------
 
     def draw_header(self):
-        """Header: centered theme title."""
+        """Header: left-aligned title + right-aligned battery indicator."""
         L = self.layout["header"]
         self.pager.fill_rect(L["x"], L["y"], L["w"], L["h"], self.BG_COLOR)
         if self.orientation == "landscape":
@@ -808,12 +820,45 @@ class Display:
 
         title = self.shared_data.display_name
         fs = getattr(self.shared_data, 'theme_title_font_size', None) or L["title_font_size"]
-        # Center title horizontally and vertically within header (above the line)
+        tx = L["x"] + 6
+        margin = 4
+
+        # Battery layout — compute icon position first so we can fit the title
+        bat = self.shared_data.battery_level
+        icon_h = 22
+        icon_w = int(icon_h * 1.8)  # battery icon aspect ratio ~1.8:1
+        if bat is not None:
+            icon_x = L["x"] + L["w"] - icon_w - margin
+            # Shrink title font if it doesn't fit with battery + 5px gap
+            max_title_w = icon_x - tx - 5
+            while fs > 10 and self.pager.ttf_width(title, self.font_viking, fs) > max_title_w:
+                fs -= 1
+
         tw = self.pager.ttf_width(title, self.font_viking, fs)
         th = self.pager.ttf_height(self.font_viking, fs)
-        tx = L["x"] + (L["w"] - tw) // 2
+        # Left-align title, vertically centered + theme offset
         ty = L["y"] + (L["h"] - 1 - th) // 2
+        ty += getattr(self.shared_data, 'theme_title_y_offset', 0)
         self.pager.draw_ttf(tx, ty, title, self.TITLE_COLOR, self.font_viking, fs)
+
+        # Battery indicator — right-aligned within header area
+        if bat is not None:
+            icon_y = L["y"] + (L["h"] - 1 - icon_h) // 2
+
+            # Draw battery icon
+            self.draw_icon_scaled(icon_x, icon_y, icon_w, icon_h, 'battery')
+
+            # Draw level text centered inside the icon (no % sign)
+            bat_text = f"{bat}"
+            if self.shared_data.battery_charging:
+                bat_text += "+"
+            bat_fs = 18
+            btw = self.pager.ttf_width(bat_text, self.font_arial, bat_fs)
+            bth = self.pager.ttf_height(self.font_arial, bat_fs)
+            bt_x = icon_x + (icon_w - btw) // 2
+            bt_y = icon_y + (icon_h - bth) // 2
+            bat_color = self.ACCENT_COLOR if self.shared_data.battery_charging else self.TEXT_COLOR
+            self.pager.draw_ttf(bt_x, bt_y, bat_text, bat_color, self.font_arial, bat_fs)
 
     def draw_stats_grid(self):
         """Stats grid with icons and numbers (3x2 grid)."""
@@ -824,7 +869,9 @@ class Display:
             # Skip top/bottom/left border lines — frise serves as left edge
             self.pager.vline(L["x"] + L["w"] - 1, L["y"], L["h"], self.TEXT_COLOR)
         else:
-            self.pager.rect(L["x"], L["y"], L["w"], L["h"], self.TEXT_COLOR)
+            # Top and bottom lines only — no left/right borders at screen edge
+            self.pager.hline(L["x"], L["y"], L["w"], self.TEXT_COLOR)
+            self.pager.hline(L["x"], L["y"] + L["h"] - 1, L["w"], self.TEXT_COLOR)
 
         cols = L["cols"]
         rows = L["rows"]
@@ -882,7 +929,9 @@ class Display:
             self.pager.hline(L["x"], L["y"], L["w"], self.TEXT_COLOR)
             self.pager.hline(L["x"], L["y"] + L["h"] - 1, L["w"], self.TEXT_COLOR)
         else:
-            self.pager.rect(L["x"], L["y"], L["w"], L["h"], self.TEXT_COLOR)
+            # Top and bottom lines only — no left/right borders at screen edge
+            self.pager.hline(L["x"], L["y"], L["w"], self.TEXT_COLOR)
+            self.pager.hline(L["x"], L["y"] + L["h"] - 1, L["w"], self.TEXT_COLOR)
 
         icon_size = L["icon_size"]
         icon_x = L["x"] + 6
@@ -922,7 +971,9 @@ class Display:
             self.pager.vline(L["x"] + L["w"] - 1, L["y"], L["h"], self.TEXT_COLOR)
             self.pager.hline(L["x"], L["y"], L["w"], self.TEXT_COLOR)
         else:
-            self.pager.rect(L["x"], L["y"], L["w"], L["h"], self.TEXT_COLOR)
+            # Top and bottom lines only — no left/right borders at screen edge
+            self.pager.hline(L["x"], L["y"], L["w"], self.TEXT_COLOR)
+            self.pager.hline(L["x"], L["y"] + L["h"] - 1, L["w"], self.TEXT_COLOR)
 
         font_size = L["font_size"]
         line_height = L["line_height"]
@@ -1049,6 +1100,9 @@ class Display:
         self.cleanup()
 
     def cleanup(self):
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
         try:
             logger.info("Cleaning up display...")
             self.pager.led_all_off()

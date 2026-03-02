@@ -7,6 +7,7 @@
     "accent_color": [128, 128, 128],
     "title_font_color": [0, 0, 0],
     "title_font_size": 26,
+    "title_y_offset": 3,
     "animation_mode": "random",
     "image_display_delaymin": 2,
     "image_display_delaymax": 8,
