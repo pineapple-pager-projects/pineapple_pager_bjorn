@@ -26,7 +26,3 @@ dev_backup/
 build-output/
 src/openssl-3.0.13/
 
-# Exclude all .md files except README.md
-*.md
-!README.md
-!APP_HANDOFF.md
