@@ -414,7 +414,7 @@ class Display:
         ]
         launchers = discover_launchers()
         for title, path in launchers:
-            options.append((f"> {title}", blue_color, (42, path)))
+            options.append((title, blue_color, (42, path)))
         options.append(("EXIT BJORN", red_color, 0))
 
         num_options = len(options)
@@ -429,8 +429,6 @@ class Display:
             box_y = int(self.height * 0.10)
             box_h = int(self.height * 0.80)
             self.pager.fill_rect(10, box_y, self.width - 20, box_h, self.BG_COLOR)
-            self.pager.rect(10, box_y, self.width - 20, box_h, self.TEXT_COLOR)
-            self.pager.rect(12, box_y + 2, self.width - 24, box_h - 4, self.TEXT_COLOR)
 
             title_y = box_y + 15
             self.pager.draw_ttf_centered(title_y, "MENU", self.TEXT_COLOR, self.font_viking, int(12 * sy))
@@ -526,7 +524,7 @@ class Display:
         ]
         launchers = discover_launchers()
         for title, path in launchers:
-            options.append((f"> {title}", blue_color, (42, path)))
+            options.append((title, blue_color, (42, path)))
         options.append(("EXIT BJORN", red_color, 0))
 
         num_options = len(options)
@@ -539,8 +537,6 @@ class Display:
             box_x, box_y = 10, 10
             box_w, box_h = self.width - 20, self.height - 20
             self.pager.fill_rect(box_x, box_y, box_w, box_h, self.BG_COLOR)
-            self.pager.rect(box_x, box_y, box_w, box_h, self.TEXT_COLOR)
-            self.pager.rect(box_x + 2, box_y + 2, box_w - 4, box_h - 4, self.TEXT_COLOR)
 
             # Title
             title_fs = 26

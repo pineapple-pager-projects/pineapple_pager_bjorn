@@ -5,7 +5,7 @@
     "bg_color": [255, 255, 255],
     "text_color": [0, 0, 0],
     "accent_color": [128, 128, 128],
-    "title_font_color": [139, 0, 0],
+    "title_font_color": [101, 67, 33],
     "title_font_size": 30,
     "title_y_offset": 0,
     "animation_mode": "random",

@@ -179,10 +179,10 @@ class BjornMenu:
         self.gfx.clear(Pager.BLACK)
 
         # Title using active theme font
-        self.gfx.draw_ttf_centered(0, self.menu_title, TITLE_COLOR, self.title_font, 40.0)
+        self.gfx.draw_ttf_centered(8, self.menu_title, TITLE_COLOR, self.title_font, 40.0)
 
         # Menu items
-        y = 50
+        y = 55
         items = self._get_menu_items(iface_idx, web_ui, theme_idx, display_landscape)
 
         for i, item in enumerate(items):
