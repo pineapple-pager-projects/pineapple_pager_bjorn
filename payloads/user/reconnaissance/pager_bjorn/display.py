@@ -396,7 +396,7 @@ class Display:
 
     def _pause_menu_portrait(self):
         """Portrait pause menu - buttons remapped for sideways holding.
-        Physical DOWN/UP = brightness, LEFT/RIGHT = navigate."""
+        Physical LEFT/RIGHT = navigate, DOWN/UP = adjust selected item."""
         self.dialog_showing = True
         time.sleep(0.2)
 
@@ -404,23 +404,28 @@ class Display:
         if current_brightness < 0:
             current_brightness = self.screen_brightness
 
-        green_color = self.pager.rgb(0, 150, 0)
         yellow_color = self.pager.rgb(180, 150, 0)
         blue_color = self.pager.rgb(50, 100, 220)
         red_color = self.pager.rgb(200, 0, 0)
 
+        # Button options (index 0 in options = index 1 in selected)
         options = [
             ("MAIN MENU", yellow_color, 99),
         ]
         launchers = discover_launchers()
-        for title, path in launchers:
-            options.append((title, blue_color, (42, path)))
+        launcher_opt_idx = -1
+        launcher_idx = 0
+        multi_launch = len(launchers) > 1
+        if launchers:
+            launcher_opt_idx = len(options)
+            title, path = launchers[launcher_idx]
+            options.append((f"EXIT TO {title}", blue_color, (42, path)))
         options.append(("EXIT BJORN", red_color, 0))
 
-        num_options = len(options)
-        selected = 0
+        # selected: 0 = brightness bar, 1..N = buttons (1-indexed into options)
+        selected = 1
+        num_items = 1 + len(options)
 
-        # Scale factors for portrait menu sizing
         sy = self.height / 250.0
 
         def draw_menu():
@@ -434,12 +439,15 @@ class Display:
             self.pager.draw_ttf_centered(title_y, "MENU", self.TEXT_COLOR, self.font_viking, int(12 * sy))
 
             bright_y = box_y + int(30 * sy)
-            self.pager.draw_ttf_centered(bright_y, "BRIGHTNESS", self.TEXT_COLOR, self.font_arial, int(9 * sy))
+            bright_color = self.TEXT_COLOR if selected == 0 else self.ACCENT_COLOR
+            self.pager.draw_ttf_centered(bright_y, "BRIGHTNESS", bright_color, self.font_arial, int(9 * sy))
 
             bar_y = bright_y + int(22 * sy)
             bar_x = 30
             bar_w = self.width - 60
             bar_h = int(12 * sy)
+            if selected == 0:
+                self.pager.rect(bar_x - 3, bar_y - 3, bar_w + 6, bar_h + 6, self.TEXT_COLOR)
             self.pager.fill_rect(bar_x, bar_y, bar_w, bar_h, self.ACCENT_COLOR)
             fill_w = int(bar_w * current_brightness / 100)
             self.pager.fill_rect(bar_x, bar_y, fill_w, bar_h, self.TEXT_COLOR)
@@ -457,13 +465,19 @@ class Display:
 
             for i, (label, color, _action) in enumerate(options):
                 btn_y = first_btn_y + i * (btn_h + btn_gap)
-                if i == selected:
+                if i + 1 == selected:
                     self.pager.fill_rect(btn_x - 4, btn_y - 4, btn_w + 8, btn_h + 8, self.TEXT_COLOR)
                 self.pager.fill_rect(btn_x, btn_y, btn_w, btn_h, color)
                 text_w = self.pager.ttf_width(label, self.font_arial, font_size)
                 text_x = btn_x + (btn_w - text_w) // 2
                 text_y = btn_y + (btn_h - font_size) // 2
                 self.pager.draw_ttf(text_x, text_y, label, self.BG_COLOR, self.font_arial, font_size)
+
+                # Arrow indicators for launcher toggle when multiple launchers exist
+                if i == launcher_opt_idx and multi_launch:
+                    arrow_fs = int(7 * sy)
+                    self.pager.draw_ttf(btn_x - 14, text_y, "<", self.TEXT_COLOR, self.font_arial, arrow_fs)
+                    self.pager.draw_ttf(btn_x + btn_w + 4, text_y, ">", self.TEXT_COLOR, self.font_arial, arrow_fs)
 
             self.pager.flip()
 
@@ -473,28 +487,42 @@ class Display:
             button = self.pager.wait_button()
 
             if button & self.pager.BTN_DOWN:
-                # Physical DOWN = Visual LEFT = Decrease brightness
-                current_brightness = max(20, current_brightness - 10)
-                self.pager.set_brightness(current_brightness)
-                self.screen_brightness = current_brightness
-                draw_menu()
+                # Physical DOWN = adjust selected item left/decrease
+                if selected == 0:
+                    current_brightness = max(20, current_brightness - 10)
+                    self.pager.set_brightness(current_brightness)
+                    self.screen_brightness = current_brightness
+                    draw_menu()
+                elif selected - 1 == launcher_opt_idx and multi_launch:
+                    launcher_idx = (launcher_idx - 1) % len(launchers)
+                    title, path = launchers[launcher_idx]
+                    options[launcher_opt_idx] = (f"EXIT TO {title}", blue_color, (42, path))
+                    draw_menu()
             elif button & self.pager.BTN_UP:
-                # Physical UP = Visual RIGHT = Increase brightness
-                current_brightness = min(100, current_brightness + 10)
-                self.pager.set_brightness(current_brightness)
-                self.screen_brightness = current_brightness
-                draw_menu()
+                # Physical UP = adjust selected item right/increase
+                if selected == 0:
+                    current_brightness = min(100, current_brightness + 10)
+                    self.pager.set_brightness(current_brightness)
+                    self.screen_brightness = current_brightness
+                    draw_menu()
+                elif selected - 1 == launcher_opt_idx and multi_launch:
+                    launcher_idx = (launcher_idx + 1) % len(launchers)
+                    title, path = launchers[launcher_idx]
+                    options[launcher_opt_idx] = (f"EXIT TO {title}", blue_color, (42, path))
+                    draw_menu()
             elif button & self.pager.BTN_LEFT:
-                # Physical LEFT = Visual UP = Move selection up
-                selected = (selected - 1) % num_options
+                # Physical LEFT = navigate up
+                selected = (selected - 1) % num_items
                 draw_menu()
             elif button & self.pager.BTN_RIGHT:
-                # Physical RIGHT = Visual DOWN = Move selection down
-                selected = (selected + 1) % num_options
+                # Physical RIGHT = navigate down
+                selected = (selected + 1) % num_items
                 draw_menu()
             elif button & self.pager.BTN_A:
+                if selected == 0:
+                    continue  # Brightness has no select action
                 self.dialog_showing = False
-                action = options[selected][2]
+                action = options[selected - 1][2]
                 if isinstance(action, tuple):
                     self._handoff_launcher_path = action[1]
                     return 42
@@ -506,7 +534,7 @@ class Display:
 
     def _pause_menu_landscape(self):
         """Landscape pause menu - natural button directions.
-        UP/DOWN = navigate, LEFT/RIGHT = brightness."""
+        UP/DOWN = navigate, LEFT/RIGHT = adjust selected item."""
         self.dialog_showing = True
         time.sleep(0.2)
 
@@ -514,21 +542,27 @@ class Display:
         if current_brightness < 0:
             current_brightness = self.screen_brightness
 
-        green_color = self.pager.rgb(0, 150, 0)
         yellow_color = self.pager.rgb(180, 150, 0)
         blue_color = self.pager.rgb(50, 100, 220)
         red_color = self.pager.rgb(200, 0, 0)
 
+        # Button options (index 0 in options = index 1 in selected)
         options = [
             ("MAIN MENU", yellow_color, 99),
         ]
         launchers = discover_launchers()
-        for title, path in launchers:
-            options.append((title, blue_color, (42, path)))
+        launcher_opt_idx = -1
+        launcher_idx = 0
+        multi_launch = len(launchers) > 1
+        if launchers:
+            launcher_opt_idx = len(options)
+            title, path = launchers[launcher_idx]
+            options.append((f"EXIT TO {title}", blue_color, (42, path)))
         options.append(("EXIT BJORN", red_color, 0))
 
-        num_options = len(options)
-        selected = 0
+        # selected: 0 = brightness bar, 1..N = buttons (1-indexed into options)
+        selected = 1
+        num_items = 1 + len(options)
 
         def draw_menu():
             self.pager.fill_rect(0, 0, self.width, self.height, self.BG_COLOR)
@@ -545,13 +579,16 @@ class Display:
 
             # Brightness section
             lbl_fs = 16
+            bright_color = self.TEXT_COLOR if selected == 0 else self.ACCENT_COLOR
             lbl_w = self.pager.ttf_width("BRIGHTNESS", self.font_arial, lbl_fs)
-            self.pager.draw_ttf((self.width - lbl_w) // 2, 43, "BRIGHTNESS", self.TEXT_COLOR, self.font_arial, lbl_fs)
+            self.pager.draw_ttf((self.width - lbl_w) // 2, 43, "BRIGHTNESS", bright_color, self.font_arial, lbl_fs)
 
             bar_y = 63
             bar_x = 40
             bar_w = self.width - 80
             bar_h = 16
+            if selected == 0:
+                self.pager.rect(bar_x - 3, bar_y - 3, bar_w + 6, bar_h + 6, self.TEXT_COLOR)
             self.pager.fill_rect(bar_x, bar_y, bar_w, bar_h, self.ACCENT_COLOR)
             fill_w = int(bar_w * current_brightness / 100)
             self.pager.fill_rect(bar_x, bar_y, fill_w, bar_h, self.TEXT_COLOR)
@@ -572,13 +609,19 @@ class Display:
 
             for i, (label, color, _action) in enumerate(options):
                 btn_y = first_btn_y + i * (btn_h + btn_gap)
-                if i == selected:
+                if i + 1 == selected:
                     self.pager.fill_rect(btn_x - 3, btn_y - 3, btn_w + 6, btn_h + 6, self.TEXT_COLOR)
                 self.pager.fill_rect(btn_x, btn_y, btn_w, btn_h, color)
                 text_w = self.pager.ttf_width(label, self.font_arial, font_size)
                 text_x = btn_x + (btn_w - text_w) // 2
                 text_y = btn_y + (btn_h - font_size) // 2
                 self.pager.draw_ttf(text_x, text_y, label, self.BG_COLOR, self.font_arial, font_size)
+
+                # Arrow indicators for launcher toggle when multiple launchers exist
+                if i == launcher_opt_idx and multi_launch:
+                    arrow_fs = 14
+                    self.pager.draw_ttf(btn_x - 16, text_y, "<", self.TEXT_COLOR, self.font_arial, arrow_fs)
+                    self.pager.draw_ttf(btn_x + btn_w + 4, text_y, ">", self.TEXT_COLOR, self.font_arial, arrow_fs)
 
             self.pager.flip()
 
@@ -588,24 +631,38 @@ class Display:
             button = self.pager.wait_button()
 
             if button & self.pager.BTN_UP:
-                selected = (selected - 1) % num_options
+                selected = (selected - 1) % num_items
                 draw_menu()
             elif button & self.pager.BTN_DOWN:
-                selected = (selected + 1) % num_options
+                selected = (selected + 1) % num_items
                 draw_menu()
             elif button & self.pager.BTN_LEFT:
-                current_brightness = max(20, current_brightness - 10)
-                self.pager.set_brightness(current_brightness)
-                self.screen_brightness = current_brightness
-                draw_menu()
+                if selected == 0:
+                    current_brightness = max(20, current_brightness - 10)
+                    self.pager.set_brightness(current_brightness)
+                    self.screen_brightness = current_brightness
+                    draw_menu()
+                elif selected - 1 == launcher_opt_idx and multi_launch:
+                    launcher_idx = (launcher_idx - 1) % len(launchers)
+                    title, path = launchers[launcher_idx]
+                    options[launcher_opt_idx] = (f"EXIT TO {title}", blue_color, (42, path))
+                    draw_menu()
             elif button & self.pager.BTN_RIGHT:
-                current_brightness = min(100, current_brightness + 10)
-                self.pager.set_brightness(current_brightness)
-                self.screen_brightness = current_brightness
-                draw_menu()
+                if selected == 0:
+                    current_brightness = min(100, current_brightness + 10)
+                    self.pager.set_brightness(current_brightness)
+                    self.screen_brightness = current_brightness
+                    draw_menu()
+                elif selected - 1 == launcher_opt_idx and multi_launch:
+                    launcher_idx = (launcher_idx + 1) % len(launchers)
+                    title, path = launchers[launcher_idx]
+                    options[launcher_opt_idx] = (f"EXIT TO {title}", blue_color, (42, path))
+                    draw_menu()
             elif button & self.pager.BTN_A:
+                if selected == 0:
+                    continue  # Brightness has no select action
                 self.dialog_showing = False
-                action = options[selected][2]
+                action = options[selected - 1][2]
                 if isinstance(action, tuple):
                     self._handoff_launcher_path = action[1]
                     return 42
@@ -852,7 +909,7 @@ class Display:
             btw = self.pager.ttf_width(bat_text, self.font_arial, bat_fs)
             bth = self.pager.ttf_height(self.font_arial, bat_fs)
             bt_x = icon_x + (icon_w - btw) // 2
-            bt_y = icon_y + (icon_h - bth) // 2 + 3
+            bt_y = icon_y + (icon_h - bth) // 2 + 2
             bat_color = self.ACCENT_COLOR if self.shared_data.battery_charging else self.TEXT_COLOR
             self.pager.draw_ttf(bt_x, bt_y, bat_text, bat_color, self.font_arial, bat_fs)
 
