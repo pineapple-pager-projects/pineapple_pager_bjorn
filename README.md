@@ -364,13 +364,11 @@ Bjorn supports a theme system that lets you customize the display name, fonts, c
 
 ### Switching Themes
 
-Set the `theme` value in `config/shared_config.json` to the theme folder name:
+Change the theme from the **startup menu** using LEFT/RIGHT on the Theme option, from the **Config** tab in the web UI, or by editing `config/shared_config.json` directly:
 
 ```json
 "theme": "clown"
 ```
-
-Or change it from the **Config** tab in the web UI under the **Theme** section.
 
 ### Creating a Custom Theme
 
