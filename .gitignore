@@ -22,6 +22,9 @@ logs/
 libs-old/
 dev_backup/
 
+# Archives
+*.zip
+
 # Build outputs
 build-output/
 src/openssl-3.0.13/
