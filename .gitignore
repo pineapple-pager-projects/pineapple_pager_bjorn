@@ -22,8 +22,9 @@ logs/
 libs-old/
 dev_backup/
 
-# Archives
+# Archives / source files
 *.zip
+*.psd
 
 # Build outputs
 build-output/
