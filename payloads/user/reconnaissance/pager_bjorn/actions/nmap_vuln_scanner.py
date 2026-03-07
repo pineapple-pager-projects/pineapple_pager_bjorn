@@ -13,6 +13,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from shared import SharedData
 from logger import Logger
+from cve_lookup import KevDatabase, NvdClient, enrich_findings
 
 logger = Logger(name="nmap_vuln_scanner.py", level=logging.INFO)
 
@@ -28,6 +29,70 @@ class NmapVulnScanner:
     """
     # HTTP ports get batched scanning to avoid MIPS CPU starvation
     HTTP_PORTS = {'80', '443', '8080', '8443'}
+
+    # SSL/TLS ports for cipher and vulnerability analysis
+    SSL_PORTS = {'443', '8443', '993', '995', '636', '587'}
+
+    # DNS ports for reconnaissance
+    DNS_PORTS = {'53'}
+
+    # SNMP ports for enumeration (UDP)
+    SNMP_PORTS = {'161'}
+
+    # Port-to-enumeration-scripts mapping (discovery/safe scripts)
+    # Note: smb-os-discovery excluded — crashes on MIPS
+    ENUM_SCRIPTS = {
+        # Common services
+        '21':   ("FTP enumeration", "ftp-anon,ftp-syst", 15),
+        '22':   ("SSH enumeration", "ssh2-enum-algos,ssh-hostkey", 15),
+        '23':   ("Telnet enumeration", "telnet-ntlm-info,telnet-encryption", 15),
+        '25':   ("SMTP enumeration", "smtp-enum-users,smtp-ntlm-info", 30),
+        '79':   ("Finger enumeration", "finger", 15),
+        '110':  ("POP3 enumeration", "pop3-capabilities,pop3-ntlm-info", 15),
+        '111':  ("RPC enumeration", "rpcinfo", 15),
+        '139':  ("NetBIOS/SMB enumeration", "smb-enum-shares,smb-enum-users,smb-security-mode,smb-protocols,smb2-security-mode", 45),
+        '143':  ("IMAP enumeration", "imap-capabilities,imap-ntlm-info", 15),
+        '389':  ("LDAP enumeration", "ldap-rootdse,ldap-search", 15),
+        '445':  ("SMB enumeration", "smb-enum-shares,smb-enum-users,smb-security-mode,smb-protocols,smb2-security-mode", 45),
+        '548':  ("AFP enumeration", "afp-serverinfo,afp-showmount", 15),
+        '554':  ("RTSP enumeration", "rtsp-methods", 15),
+        '631':  ("CUPS enumeration", "cups-info,cups-queue-info", 15),
+        '873':  ("Rsync enumeration", "rsync-list-modules", 15),
+        '1099': ("Java RMI enumeration", "rmi-dumpregistry", 15),
+        '1433': ("MS-SQL enumeration", "ms-sql-info,ms-sql-ntlm-info", 15),
+        '1521': ("Oracle enumeration", "oracle-tns-version", 15),
+        '1883': ("MQTT enumeration", "mqtt-subscribe", 15),
+        '2049': ("NFS enumeration", "nfs-showmount", 15),
+        '3260': ("iSCSI enumeration", "iscsi-info", 15),
+        '3306': ("MySQL enumeration", "mysql-info", 15),
+        '3389': ("RDP enumeration", "rdp-enum-encryption,rdp-ntlm-info", 15),
+        '5060': ("SIP enumeration", "sip-methods", 15),
+        '5222': ("XMPP enumeration", "xmpp-info", 15),
+        '5672': ("AMQP enumeration", "amqp-info", 15),
+        '5900': ("VNC enumeration", "vnc-info,realvnc-auth-bypass", 15),
+        '6379': ("Redis enumeration", "redis-info", 15),
+        '11211':("Memcached enumeration", "memcached-info", 15),
+        '27017':("MongoDB enumeration", "mongodb-info,mongodb-databases", 15),
+    }
+
+    SSL_SCRIPTS = [
+        ("SSL/TLS analysis",
+         "ssl-enum-ciphers,ssl-cert,ssl-heartbleed,ssl-poodle,ssl-dh-params,ssl-ccs-injection",
+         45),
+    ]
+
+    DNS_SCRIPTS = [
+        ("DNS reconnaissance",
+         "dns-zone-transfer,dns-brute,dns-cache-snoop,dns-recursion,dns-nsid",
+         60),
+    ]
+
+    SNMP_SCRIPTS = [
+        ("SNMP enumeration",
+         "snmp-info,snmp-brute,snmp-sysdescr,snmp-netstat,snmp-processes",
+         45,
+         "snmp-brute.communitiesdb=public,private,community"),
+    ]
 
     # HTTP vuln scripts split into batches of ~15-20 for MIPS compatibility.
     # Running all 56 concurrently on MIPS produces zero output; batching works.
@@ -73,6 +138,10 @@ class NmapVulnScanner:
         ("Slowloris check",
          "http-slowloris-check",
          60),
+        # Batch 7: CMS and web enumeration
+        ("Web enumeration",
+         "http-wordpress-enum,http-drupal-enum,http-auth-finder,http-robots.txt",
+         60),
     ]
 
     def __init__(self, shared_data):
@@ -81,7 +150,48 @@ class NmapVulnScanner:
         self.summary_file = self.shared_data.vuln_summary_file
         self.create_summary_file()
         self._check_nse_available()
+        self._init_threat_intel()
         logger.debug("NmapVulnScanner initialized.")
+
+    def _init_threat_intel(self):
+        """Initialize KEV database, optional NVD client, and vulners availability."""
+        kev_path = os.path.join(self.shared_data.currentdir, 'data', 'kev_catalog.json')
+        self.kev_db = KevDatabase(kev_path)
+
+        self.nvd_client = None
+        if getattr(self.shared_data, 'enable_nvd_lookup', False) and getattr(self.shared_data, 'nvd_api_key', ''):
+            cache_path = os.path.join(self.shared_data.currentdir, 'data', 'nvd_cache.json')
+            self.nvd_client = NvdClient(api_key=self.shared_data.nvd_api_key, cache_path=cache_path)
+            logger.debug("NVD API client initialized for CVSS enrichment")
+
+        # Check vulners.nse availability (requires internet)
+        self._vulners_available = False
+        if getattr(self.shared_data, 'enable_vulners_lookup', False):
+            try:
+                import socket
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(5)
+                s.connect(('vulners.com', 443))
+                s.close()
+                self._vulners_available = True
+                logger.info("Vulners lookup enabled")
+            except Exception:
+                logger.info("Vulners lookup disabled (no internet)")
+
+    def _update_vuln_counter(self):
+        """Update shared_data.vulnnbr from vulnerability_summary.csv."""
+        try:
+            if os.path.exists(self.summary_file):
+                with open(self.summary_file, 'r', newline='') as f:
+                    reader = csv.DictReader(f)
+                    total = 0
+                    for row in reader:
+                        vulns = row.get("Vulnerabilities", "").strip()
+                        if vulns:
+                            total += len([v for v in vulns.split("; ") if v.strip()])
+                    self.shared_data.vulnnbr = total
+        except Exception:
+            pass
 
     def _check_nse_available(self):
         """Check if nmap NSE scripts are available. Logs warning if not."""
@@ -99,7 +209,7 @@ class NmapVulnScanner:
             logger.error(f"NSE scripts not found in {scripts_dir} — vuln scanning will not work")
             self.nse_available = False
             return
-        logger.info(f"NSE scripts verified in {scripts_dir} ({len(os.listdir(scripts_dir))} scripts)")
+        logger.debug(f"NSE scripts verified in {scripts_dir} ({len(os.listdir(scripts_dir))} scripts)")
         self.nse_available = True
 
     def create_summary_file(self):
@@ -161,10 +271,12 @@ class NmapVulnScanner:
                 cmd.extend(["--script-args", ",".join(args_parts)])
             cmd.extend(["-p", port, ip])
             start = time.time()
+            # Ensure subprocess outlives nmap's script-timeout to avoid race condition
+            effective_timeout = max(batch_timeout, script_timeout + 30)
             result = subprocess.run(
                 cmd,
                 capture_output=True, text=True,
-                timeout=batch_timeout
+                timeout=effective_timeout
             )
             elapsed = time.time() - start
             # Warn only if nmap returned suspiciously fast with no output —
@@ -205,11 +317,76 @@ class NmapVulnScanner:
     def _scan_regular_port(self, ip, port):
         """Scan a non-HTTP port with --script vuln in a single call."""
         port_timeout = getattr(self.shared_data, 'vuln_scan_timeout', 120)
+        scripts = "vuln"
+        if self._vulners_available:
+            scripts = "vuln,vulners"
         logger.info(f"Vuln scanning {ip} port {port}...")
-        stdout, ok = self._run_nmap_scripts(ip, port, "vuln", 30, port_timeout)
+        stdout, ok = self._run_nmap_scripts(ip, port, scripts, 30, port_timeout)
         if not ok:
             logger.warning(f"Vuln scan timeout on {ip}:{port} after {port_timeout}s, moving to next port")
         return stdout, ok
+
+    def _scan_ssl_port(self, ip, port):
+        """Scan an SSL/TLS port for cipher and certificate vulnerabilities."""
+        batch_timeout = getattr(self.shared_data, 'vuln_scan_timeout', 120)
+        combined = ""
+        for batch in self.SSL_SCRIPTS:
+            batch_name, scripts, script_timeout = batch[0], batch[1], batch[2]
+            logger.info(f"SSL scanning {ip}:{port} - {batch_name}")
+            self.shared_data.bjornstatustext2 = f"{ip}:{port} {batch_name}"
+            stdout, ok = self._run_nmap_scripts(ip, port, scripts, script_timeout, batch_timeout)
+            if ok:
+                combined += stdout
+        return combined, bool(combined)
+
+    def _scan_dns_port(self, ip, port):
+        """Scan a DNS port for zone transfer, brute force, and cache snooping."""
+        batch_timeout = getattr(self.shared_data, 'vuln_scan_timeout', 120)
+        combined = ""
+        for batch in self.DNS_SCRIPTS:
+            batch_name, scripts, script_timeout = batch[0], batch[1], batch[2]
+            logger.info(f"DNS scanning {ip}:{port} - {batch_name}")
+            self.shared_data.bjornstatustext2 = f"{ip}:{port} {batch_name}"
+            stdout, ok = self._run_nmap_scripts(ip, port, scripts, script_timeout, batch_timeout)
+            if ok:
+                combined += stdout
+        return combined, bool(combined)
+
+    def _scan_snmp_port(self, ip, port):
+        """Scan an SNMP port (UDP) for enumeration and community string brute force."""
+        batch_timeout = getattr(self.shared_data, 'vuln_scan_timeout', 120)
+        combined = ""
+        for batch in self.SNMP_SCRIPTS:
+            batch_name, scripts, script_timeout = batch[0], batch[1], batch[2]
+            extra_args = batch[3] if len(batch) > 3 else None
+            logger.info(f"SNMP scanning {ip}:{port} - {batch_name}")
+            self.shared_data.bjornstatustext2 = f"{ip}:{port} {batch_name}"
+            # SNMP uses UDP — inject -sU into the command
+            try:
+                cmd = ["nmap", self.shared_data.nmap_scan_aggressivity,
+                     "-sU", "--script", scripts,
+                     "--script-timeout", f"{script_timeout}s"]
+                if extra_args:
+                    cmd.extend(["--script-args", extra_args])
+                cmd.extend(["-p", port, ip])
+                effective_timeout = max(batch_timeout, script_timeout + 30)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=effective_timeout)
+                combined += result.stdout
+            except subprocess.TimeoutExpired:
+                logger.warning(f"SNMP scan timeout on {ip}:{port}")
+            except Exception as e:
+                logger.error(f"Error in SNMP scan on {ip}:{port}: {e}")
+        return combined, bool(combined)
+
+    def _run_enumeration(self, ip, port, batch_timeout):
+        """Run discovery/safe enumeration scripts for a port if available."""
+        entry = self.ENUM_SCRIPTS.get(port)
+        if not entry:
+            return "", False
+        enum_name, scripts, script_timeout = entry
+        logger.info(f"Enumerating {ip}:{port} - {enum_name}")
+        self.shared_data.bjornstatustext2 = f"{ip}:{port} {enum_name}"
+        return self._run_nmap_scripts(ip, port, scripts, script_timeout, batch_timeout)
 
     def scan_vulnerabilities(self, ip, hostname, mac, ports):
         combined_result = ""
@@ -231,11 +408,42 @@ class NmapVulnScanner:
             if self.shared_data.orchestrator_should_exit:
                 break
 
-            # HTTP ports use batched scanning with optional Host header for vhosts
+            # Route port to appropriate scanner
             if port in self.HTTP_PORTS:
                 stdout, ok = self._scan_http_port(ip, port, hostname=hostname if hostname else None)
+                # HTTPS ports also get SSL analysis
+                if port in self.SSL_PORTS:
+                    ssl_out, ssl_ok = self._scan_ssl_port(ip, port)
+                    if ssl_ok:
+                        combined_result += ssl_out
+                        details = self.parse_vulnerability_details(ssl_out)
+                        if details:
+                            all_details.extend(details)
+                        vulns = self.parse_vulnerabilities(ssl_out)
+                        if vulns:
+                            for v in vulns.split("; "):
+                                if v.strip():
+                                    all_vulnerabilities.add(v.strip())
+            elif port in self.DNS_PORTS:
+                stdout, ok = self._scan_dns_port(ip, port)
+            elif port in self.SNMP_PORTS:
+                stdout, ok = self._scan_snmp_port(ip, port)
+            elif port in self.SSL_PORTS:
+                # Non-HTTP SSL ports (IMAPS, POP3S, LDAPS)
+                stdout, ok = self._scan_ssl_port(ip, port)
+                regular_out, regular_ok = self._scan_regular_port(ip, port)
+                if regular_ok:
+                    stdout = (stdout or '') + regular_out
+                    ok = True
             else:
                 stdout, ok = self._scan_regular_port(ip, port)
+
+            # Run enumeration scripts after vuln scan for this port
+            if self.shared_data.scan_enumeration:
+                batch_timeout = getattr(self.shared_data, 'vuln_scan_timeout', 120)
+                enum_out, enum_ok = self._run_enumeration(ip, port, batch_timeout)
+                if enum_ok and enum_out:
+                    stdout = (stdout or '') + enum_out
 
             if ok:
                 combined_result += stdout
@@ -251,6 +459,14 @@ class NmapVulnScanner:
                 details = self.parse_vulnerability_details(stdout)
                 if details:
                     all_details.extend(details)
+
+                # Incremental write: flush findings to disk after each port
+                if all_vulnerabilities:
+                    merged_vulns = "; ".join(sorted(all_vulnerabilities))
+                    scanned_ports_so_far = ",".join(ports[:ports.index(port) + 1])
+                    self.update_summary_file(ip, hostname, mac, scanned_ports_so_far, merged_vulns)
+                    self.save_vulnerability_details(mac, ip, all_details)
+                    self._update_vuln_counter()
 
         # Merge duplicate findings across ports — add port to existing finding
         merged_details = []
@@ -272,6 +488,13 @@ class NmapVulnScanner:
                 seen_scripts[key] = len(merged_details)
                 merged_details.append(finding)
         all_details = merged_details
+
+        # Enrich findings with threat intelligence (KEV + optional NVD)
+        if all_details and self.kev_db.loaded:
+            all_details = enrich_findings(all_details, self.kev_db, self.nvd_client)
+            kev_count = sum(1 for d in all_details if d.get('kev'))
+            if kev_count:
+                logger.info(f"{ip}: {kev_count} finding(s) flagged as known exploited (CISA KEV)")
 
         # Save combined results from all ports that completed
         if ports_succeeded > 0:
@@ -300,6 +523,8 @@ class NmapVulnScanner:
             return 'failed'
         self.shared_data.bjornorch_status = "NmapVulnScanner"
         ports = row["Ports"].split(";")
+        # Parse service info from netkb for smarter script selection
+        services_str = row.get("Services", "")
         try:
             scan_result = self.scan_vulnerabilities(ip, row["Hostnames"], row["MAC Address"], ports)
 
@@ -325,9 +550,12 @@ class NmapVulnScanner:
     # Nmap output lines that indicate the script found nothing — not a vulnerability
     _NEGATIVE_RE = re.compile(
         r"Couldn't find any|Couldn't find a file-type"
-        r"|not vulnerable|NOT VULNERABLE"
+        r"|not\s+(?:\w+\s+)*vulnerable|NOT VULNERABLE"
         r"|no vulnerable|no issues found|^ERROR(?::|$)"
-        r"|Script execution failed",
+        r"|Script execution failed|^false$"
+        r"|Can't guess domain|not currently available"
+        r"|No reply from server|DISABLED"
+        r"|bind\.version:",
         re.IGNORECASE)
 
     def parse_vulnerabilities(self, scan_result):
@@ -370,7 +598,7 @@ class NmapVulnScanner:
                     vulnerabilities.add(f"{friendly} ({cve_str})")
                 else:
                     vulnerabilities.add(friendly)
-            elif has_output and not current_script.startswith('http-vuln-'):
+            elif has_output and '-vuln-' not in current_script:
                 # Informational script with output — the output IS the finding
                 vulnerabilities.add(friendly)
 
@@ -500,6 +728,79 @@ class NmapVulnScanner:
         'http-phpmyadmin-dir-traversal': 'phpMyAdmin Directory Traversal',
         'http-jsonp-detection': 'JSONP Endpoint Found',
         'http-phpself-xss': 'PHP_SELF XSS',
+        # SSL/TLS scripts
+        'ssl-enum-ciphers': 'SSL/TLS Cipher Enumeration',
+        'ssl-cert': 'SSL Certificate Info',
+        'ssl-heartbleed': 'Heartbleed (CVE-2014-0160)',
+        'ssl-poodle': 'POODLE (CVE-2014-3566)',
+        'ssl-dh-params': 'Weak Diffie-Hellman Parameters',
+        'ssl-ccs-injection': 'CCS Injection (CVE-2014-0224)',
+        # DNS scripts
+        'dns-zone-transfer': 'DNS Zone Transfer',
+        'dns-brute': 'DNS Brute Force',
+        'dns-cache-snoop': 'DNS Cache Snooping',
+        'dns-recursion': 'DNS Recursion Enabled',
+        'dns-nsid': 'DNS NSID',
+        # SNMP scripts
+        'snmp-info': 'SNMP System Info',
+        'snmp-brute': 'SNMP Community String Brute Force',
+        'snmp-sysdescr': 'SNMP System Description',
+        'snmp-netstat': 'SNMP Network Statistics',
+        'snmp-processes': 'SNMP Running Processes',
+        # Vulners
+        'vulners': 'Known Vulnerabilities (Vulners)',
+        # Enumeration scripts
+        'ftp-anon': 'FTP Anonymous Login',
+        'ftp-syst': 'FTP System Info',
+        'ssh2-enum-algos': 'SSH Algorithms',
+        'ssh-hostkey': 'SSH Host Key',
+        'telnet-ntlm-info': 'Telnet NTLM Info',
+        'telnet-encryption': 'Telnet Encryption',
+        'smtp-enum-users': 'SMTP User Enumeration',
+        'smtp-ntlm-info': 'SMTP NTLM Info',
+        'finger': 'Finger User Enumeration',
+        'pop3-capabilities': 'POP3 Capabilities',
+        'pop3-ntlm-info': 'POP3 NTLM Info',
+        'rpcinfo': 'RPC Services',
+        'imap-capabilities': 'IMAP Capabilities',
+        'imap-ntlm-info': 'IMAP NTLM Info',
+        'ldap-rootdse': 'LDAP Root DSE',
+        'ldap-search': 'LDAP Search',
+        'smb-enum-shares': 'SMB Shares',
+        'smb-enum-users': 'SMB Users',
+        'smb-security-mode': 'SMB Security Mode',
+        'smb-protocols': 'SMB Protocol Versions',
+        'smb2-security-mode': 'SMB2 Signing Mode',
+        'afp-serverinfo': 'AFP Server Info',
+        'afp-showmount': 'AFP Shared Volumes',
+        'rtsp-methods': 'RTSP Methods',
+        'cups-info': 'CUPS Printer Info',
+        'cups-queue-info': 'CUPS Print Queues',
+        'rsync-list-modules': 'Rsync Modules',
+        'rmi-dumpregistry': 'Java RMI Registry',
+        'ms-sql-info': 'MS-SQL Server Info',
+        'ms-sql-ntlm-info': 'MS-SQL NTLM Info',
+        'oracle-tns-version': 'Oracle TNS Version',
+        'mqtt-subscribe': 'MQTT Topics',
+        'nfs-showmount': 'NFS Exports',
+        'iscsi-info': 'iSCSI Targets',
+        'mysql-info': 'MySQL Server Info',
+        'rdp-enum-encryption': 'RDP Encryption Level',
+        'rdp-ntlm-info': 'RDP NTLM Info',
+        'sip-methods': 'SIP Methods',
+        'xmpp-info': 'XMPP Server Info',
+        'amqp-info': 'AMQP Server Info',
+        'vnc-info': 'VNC Server Info',
+        'realvnc-auth-bypass': 'RealVNC Auth Bypass',
+        'redis-info': 'Redis Server Info',
+        'memcached-info': 'Memcached Server Info',
+        'mongodb-info': 'MongoDB Server Info',
+        'mongodb-databases': 'MongoDB Databases',
+        # HTTP enumeration
+        'http-wordpress-enum': 'WordPress Enumeration',
+        'http-drupal-enum': 'Drupal Enumeration',
+        'http-auth-finder': 'Authentication Pages Found',
+        'http-robots.txt': 'Robots.txt Entries',
     }
 
     # Nmap noise lines to skip when building descriptions
@@ -633,8 +934,8 @@ class NmapVulnScanner:
                 'references': refs
             }
 
-        # Informational script — any output = a finding (skip http-vuln-* without state)
-        if info_lines and not script_name.startswith('http-vuln-'):
+        # Informational script — any output = a finding (skip *-vuln-* without state)
+        if info_lines and '-vuln-' not in script_name:
             return {
                 'port': port or '',
                 'service': service or '',
@@ -660,7 +961,7 @@ class NmapVulnScanner:
             with open(json_file, 'w') as f:
                 json.dump(details, f, indent=2)
             if details:
-                logger.info(f"Vulnerability details saved to {json_file}")
+                logger.debug(f"Vulnerability details saved to {json_file}")
         except Exception as e:
             logger.error(f"Error saving vulnerability details for {ip}: {e}")
 
@@ -682,7 +983,7 @@ class NmapVulnScanner:
             with open(result_file, 'w') as file:
                 file.write(scan_result)
 
-            logger.info(f"Results saved to {result_file}")
+            logger.debug(f"Results saved to {result_file}")
         except Exception as e:
             logger.error(f"Error saving scan results for {ip}: {e}")
 
@@ -720,7 +1021,7 @@ class NmapVulnScanner:
                 for (ip, hostname, mac), vulns in grouped.items():
                     writer.writerow([ip, hostname, mac, "; ".join(vulns)])
 
-            logger.info(f"Summary saved to {final_summary_file}")
+            logger.debug(f"Summary saved to {final_summary_file}")
         except Exception as e:
             logger.error(f"Error saving summary: {e}")
 

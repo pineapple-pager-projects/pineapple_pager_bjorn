@@ -7,8 +7,14 @@ const App = {
     activeTab: null,
     tabs: {},
     pollTimers: {},
+    theme: null,
 
     init() {
+        // Migrate old tab names in localStorage
+        var saved = localStorage.getItem('bjorn_active_tab');
+        if (saved === 'network') localStorage.setItem('bjorn_active_tab', 'hosts');
+        if (saved === 'bjorn') localStorage.setItem('bjorn_active_tab', 'display');
+
         // Bind nav clicks
         document.querySelectorAll('.nav-item').forEach(el => {
             el.addEventListener('click', e => {
@@ -17,9 +23,9 @@ const App = {
             });
         });
 
-        // Hash change handling
+        // Hash change handling (support old hash names too)
         window.addEventListener('hashchange', () => {
-            const tab = location.hash.slice(1);
+            var tab = this.resolveTabName(location.hash.slice(1));
             if (tab && this.tabs[tab]) this.switchTab(tab);
         });
 
@@ -28,13 +34,23 @@ const App = {
             if (this.tabs[id].init) this.tabs[id].init();
         });
 
+        // Load theme before first tab switch
+        this.loadTheme();
+
         // Restore last tab or use hash or default to dashboard
-        const hash = location.hash.slice(1);
-        const saved = localStorage.getItem('bjorn_active_tab');
-        const initial = (hash && this.tabs[hash]) ? hash
+        var hash = this.resolveTabName(location.hash.slice(1));
+        saved = localStorage.getItem('bjorn_active_tab');
+        var initial = (hash && this.tabs[hash]) ? hash
                       : (saved && this.tabs[saved]) ? saved
                       : 'dashboard';
         this.switchTab(initial);
+    },
+
+    resolveTabName(name) {
+        // Map old tab names to new ones
+        if (name === 'network') return 'hosts';
+        if (name === 'bjorn') return 'display';
+        return name;
     },
 
     registerTab(id, module) {
@@ -152,13 +168,79 @@ const App = {
             '/': 'dashboard',
             '/index.html': 'dashboard',
             '/config.html': 'config',
-            '/network.html': 'network',
-            '/netkb.html': 'network',
+            '/network.html': 'hosts',
+            '/netkb.html': 'hosts',
             '/credentials.html': 'loot',
             '/loot.html': 'loot',
-            '/bjorn.html': 'bjorn'
+            '/bjorn.html': 'display'
         };
         return map[path] || null;
+    },
+
+    switchToLootSubTab(sub) {
+        // Force tab switch even if already on loot (switchTab skips same-tab)
+        if (this.activeTab !== 'loot') {
+            this.switchTab('loot');
+        }
+        if (this.tabs.loot && this.tabs.loot.activateSubTab) {
+            this.tabs.loot.activateSubTab(sub);
+        }
+    },
+
+    async loadTheme() {
+        try {
+            var data = await this.api('/api/theme');
+            this.theme = data;
+
+            var web = data.web || {};
+            var root = document.documentElement.style;
+
+            // Map theme keys to CSS custom properties
+            var varMap = {
+                'bg_dark': '--bg-dark',
+                'bg_surface': '--bg-surface',
+                'bg_elevated': '--bg-elevated',
+                'accent': '--gold',
+                'accent_bright': '--gold-bright',
+                'accent_dim': '--gold-dim',
+                'text_primary': '--text-primary',
+                'text_secondary': '--text-secondary',
+                'text_muted': '--text-muted',
+                'border': '--border',
+                'border_light': '--border-light',
+                'glow': '--glow-gold',
+                'font_title': '--font-viking'
+            };
+
+            for (var key in varMap) {
+                if (web[key]) {
+                    root.setProperty(varMap[key], web[key]);
+                }
+            }
+
+            // Inject dynamic @font-face for theme title font
+            var fontStyle = document.getElementById('theme-font-style');
+            if (!fontStyle) {
+                fontStyle = document.createElement('style');
+                fontStyle.id = 'theme-font-style';
+                document.head.appendChild(fontStyle);
+            }
+            fontStyle.textContent = "@font-face { font-family: 'ThemeTitle'; src: url('" +
+                (data.font_url || '/api/theme_font') + "') format('truetype'); font-display: swap; }";
+
+            // Update document title
+            if (data.web_title) {
+                document.title = data.web_title;
+            }
+
+            // Update the Display tab's nav label dynamically
+            var displayLabel = document.getElementById('nav-label-display');
+            if (displayLabel && web.nav_label_display) {
+                displayLabel.textContent = web.nav_label_display;
+            }
+        } catch (e) {
+            console.error('Failed to load theme:', e);
+        }
     }
 };
 

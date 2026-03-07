@@ -16,7 +16,7 @@ var BjornTab = {
     refreshing: false,
 
     init() {
-        var panel = document.getElementById('tab-bjorn');
+        var panel = document.getElementById('tab-display');
         panel.innerHTML = '<div class="bjorn-panel">' +
             '<div class="lcd-frame" id="lcd-frame">' +
             '<canvas id="lcd-canvas" width="222" height="480" class="lcd-img"></canvas>' +
@@ -86,11 +86,11 @@ var BjornTab = {
     },
 
     activate() {
-        App.startPolling('bjorn', () => this.refresh(), this.webDelay);
+        App.startPolling('display', () => this.refresh(), this.webDelay);
     },
 
     deactivate() {
-        App.stopPolling('bjorn');
+        App.stopPolling('display');
     },
 
     async refresh() {
@@ -208,4 +208,4 @@ var BjornTab = {
     }
 };
 
-App.registerTab('bjorn', BjornTab);
+App.registerTab('display', BjornTab);

@@ -12,5 +12,21 @@
     "image_display_delaymin": 7,
     "image_display_delaymax": 15,
     "comment_delaymin": 10,
-    "comment_delaymax": 20
+    "comment_delaymax": 20,
+    "web": {
+        "bg_dark": "#0f1a1f",
+        "bg_surface": "#162028",
+        "bg_elevated": "#1e2d38",
+        "accent": "#c9943a",
+        "accent_bright": "#e5b44e",
+        "accent_dim": "#8b6914",
+        "text_primary": "#d8d0c0",
+        "text_secondary": "#8a9a8e",
+        "text_muted": "#5a6a5e",
+        "border": "#253540",
+        "border_light": "#354a55",
+        "glow": "0 0 12px rgba(201, 148, 58, 0.25)",
+        "font_title": "'Pirate', 'Georgia', serif",
+        "nav_label_display": "Display"
+    }
 }

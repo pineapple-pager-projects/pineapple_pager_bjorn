@@ -170,7 +170,9 @@ class SharedData:
             "__title_performance__": "Performance",
             "worker_threads": 5,
             "max_failed_retries": 3,
-            "bruteforce_queue_timeout": 600,
+            "bruteforce_attempt_timeout": 30,
+            "bruteforce_max_retries": 3,
+            "bruteforce_max_total_retries": 15,
             "displaying_csv": True,
 
             "__title_logging__": "Logging",
@@ -190,6 +192,17 @@ class SharedData:
             "theme": "bjorn",
             "override_theme_delays": False,
             "override_theme_comment_delays": False,
+
+            "__title_service_detection__": "Service Detection",
+            "service_version_detection": True,
+            "os_detection": True,
+            "version_intensity": 3,
+            "enable_vulners_lookup": True,
+            "scan_enumeration": True,
+
+            "__title_threat_intel__": "Threat Intelligence",
+            "enable_nvd_lookup": False,
+            "nvd_api_key": "",
         }
 
     def update_mac_blacklist(self):
@@ -218,7 +231,7 @@ class SharedData:
         for ip in device_ips:
             if ip not in effective:
                 effective.append(ip)
-                logger.info(f"Auto-blacklisted device IP {ip}")
+                logger.debug(f"Auto-blacklisted device IP {ip}")
 
         # Conditionally add gateway based on toggle (runtime only, not persisted)
         if self.config.get('blacklist_gateway', True):
@@ -226,7 +239,7 @@ class SharedData:
             if gateway_ip:
                 if gateway_ip not in effective:
                     effective.append(gateway_ip)
-                    logger.info(f"Auto-blacklisted gateway IP {gateway_ip}")
+                    logger.debug(f"Auto-blacklisted gateway IP {gateway_ip}")
             else:
                 logger.warning("Could not detect gateway IP for blacklist")
         else:
@@ -234,7 +247,7 @@ class SharedData:
 
         # Set effective blacklist (this is what scanning.py snapshots at init)
         self.ip_scan_blacklist = effective
-        logger.info(f"Effective IP blacklist: {effective}")
+        logger.debug(f"Effective IP blacklist: {effective}")
 
     def get_gateway_ip(self):
         """Get the default gateway IP address."""
@@ -363,7 +376,7 @@ class SharedData:
     def initialize_display(self):
         """Initialize display settings for Pager LCD."""
         try:
-            logger.info("Initializing Pager display settings...")
+            logger.debug("Initializing Pager display settings...")
             # Set dimensions based on screen_rotation config
             rotation = self.config.get('screen_rotation', 270)
             if rotation == 270:
@@ -430,6 +443,16 @@ class SharedData:
         self.imagegen = None
         self.current_image_path = None
 
+        # Service detection config
+        self.service_version_detection = self.config.get('service_version_detection', True)
+        self.version_intensity = self.config.get('version_intensity', 3)
+        self.enable_vulners_lookup = self.config.get('enable_vulners_lookup', True)
+        self.scan_enumeration = self.config.get('scan_enumeration', True)
+
+        # Threat intelligence config
+        self.enable_nvd_lookup = self.config.get('enable_nvd_lookup', False)
+        self.nvd_api_key = self.config.get('nvd_api_key', '')
+
     @property
     def orchestrator_should_exit(self):
         """Read orchestrator exit flag from control file (for IPC between webapp and Bjorn)."""
@@ -461,7 +484,7 @@ class SharedData:
                 os.remove(self.webconsolelog)
                 logger.info(f"Deleted web console log file at {self.webconsolelog}")
             else:
-                logger.info(f"Web console log file not found at {self.webconsolelog}")
+                logger.debug(f"Web console log file not found at {self.webconsolelog}")
         except OSError as e:
             logger.error(f"OS error occurred while deleting web console log file: {e}")
         except Exception as e:
@@ -493,7 +516,7 @@ class SharedData:
                     csvwriter = csv.writer(csvfile)
                     csvwriter.writerow(['Total Open Ports', 'Alive Hosts Count', 'All Known Hosts Count', 'Vulnerabilities Count'])
                     csvwriter.writerow([0, 0, 0, 0])
-                logger.info(f"Created live status file at {self.livestatusfile}")
+                logger.debug(f"Created live status file at {self.livestatusfile}")
             else:
                 logger.info(f"Live status file already exists at {self.livestatusfile}")
         except OSError as e:
@@ -557,7 +580,7 @@ class SharedData:
             except Exception as e:
                 logger.error(f"Unexpected error reading actions file: {e}")
 
-            headers = ["MAC Address", "IPs", "Hostnames", "Alive", "Ports"] + action_names
+            headers = ["MAC Address", "IPs", "Hostnames", "Alive", "Ports", "Vendor", "Device Type"] + action_names
 
             # Only create the file if it doesn't exist - never auto-clear
             if not os.path.exists(self.netkbfile):
@@ -565,7 +588,7 @@ class SharedData:
                     with open(self.netkbfile, 'w', newline='') as file:
                         writer = csv.writer(file)
                         writer.writerow(headers)
-                    logger.info(f"Network knowledge base CSV file created at {self.netkbfile}")
+                    logger.debug(f"Network knowledge base CSV file created at {self.netkbfile}")
                 except IOError as e:
                     logger.error(f"Error writing to netkbfile: {e}")
                 except Exception as e:
@@ -625,7 +648,7 @@ class SharedData:
     def load_config(self):
         """Load the configuration from the shared configuration JSON file."""
         try:
-            logger.info("Loading configuration...")
+            logger.debug("Loading configuration...")
             if os.path.exists(self.shared_config_json):
                 with open(self.shared_config_json, 'r') as f:
                     config = json.load(f)
@@ -649,7 +672,7 @@ class SharedData:
 
     def save_config(self):
         """Save the configuration to the shared configuration JSON file."""
-        logger.info("Saving configuration...")
+        logger.debug("Saving configuration...")
         try:
             if not os.path.exists(self.configdir):
                 os.makedirs(self.configdir)
@@ -657,7 +680,7 @@ class SharedData:
             try:
                 with open(self.shared_config_json, 'w') as f:
                     json.dump(self.config, f, indent=4)
-                logger.info(f"Configuration saved to {self.shared_config_json}")
+                logger.debug(f"Configuration saved to {self.shared_config_json}")
             except IOError as e:
                 logger.error(f"Error writing to configuration file: {e}")
             except Exception as e:
@@ -670,7 +693,7 @@ class SharedData:
     def load_fonts(self):
         """Load font paths (not PIL fonts - display.py will use pagerctl)."""
         try:
-            logger.info("Loading font paths...")
+            logger.debug("Loading font paths...")
             # Store font paths instead of PIL font objects
             self.font_arial_path = os.path.join(self.fontdir, 'Arial.ttf')
             self.font_viking_path = os.path.join(self.fontdir, 'Viking.TTF')
@@ -737,7 +760,7 @@ class SharedData:
     def load_images(self):
         """Load image paths (not PIL images - display.py will use pagerctl)."""
         try:
-            logger.info("Loading image paths...")
+            logger.debug("Loading image paths...")
 
             # Store image paths instead of PIL image objects
             self.bjornstatusimage_path = None
@@ -837,7 +860,7 @@ class SharedData:
                 self.theme_title_font_color = theme_data.get("title_font_color", None)
                 self.theme_title_font_size = theme_data.get("title_font_size", None)
                 self.theme_title_y_offset = theme_data.get("title_y_offset", 0)
-                logger.info(f"Loaded theme '{theme_name}': display_name='{self.display_name}'")
+                logger.debug(f"Loaded theme '{theme_name}': display_name='{self.display_name}'")
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Error reading theme.json for '{theme_name}': {e}")
         else:
@@ -847,7 +870,7 @@ class SharedData:
         theme_font = os.path.join(theme_dir, "fonts", "title.TTF")
         if os.path.isfile(theme_font):
             self.font_viking_path = theme_font
-            logger.info(f"Theme font: {theme_font}")
+            logger.debug(f"Theme font: {theme_font}")
 
         # Override static images (icons, frise, etc.) if theme provides them
         theme_images_dir = os.path.join(theme_dir, "images")
@@ -856,18 +879,18 @@ class SharedData:
                 theme_img = self._find_image(theme_images_dir, name)
                 if theme_img:
                     self.static_images[name] = theme_img
-            logger.info(f"Theme static images: {theme_images_dir}")
+            logger.debug(f"Theme static images: {theme_images_dir}")
 
         # Override comments file if theme provides one
         theme_comments = os.path.join(theme_dir, "comments", "comments.json")
         if os.path.isfile(theme_comments):
             self.commentsfile = theme_comments
-            logger.info(f"Theme comments: {theme_comments}")
+            logger.debug(f"Theme comments: {theme_comments}")
 
         # Override character images (status images + animation frames) if theme provides them
         theme_status_dir = os.path.join(theme_dir, "images", "status")
         if os.path.isdir(theme_status_dir):
-            logger.info(f"Theme status images: {theme_status_dir}")
+            logger.debug(f"Theme status images: {theme_status_dir}")
             # Override main status images (one per action)
             for b_class, default_path in list(self.status_images.items()):
                 theme_path = self._find_image(os.path.join(theme_status_dir, b_class), b_class)

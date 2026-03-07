@@ -122,7 +122,7 @@ def discover_launchers():
     launchers = []
     pattern = os.path.join(PAYLOAD_DIR, 'launch_*.sh')
     matches = sorted(glob.glob(pattern))
-    logger.info(f"discover_launchers: PAYLOAD_DIR={PAYLOAD_DIR} pattern={pattern} matches={matches}")
+    logger.debug(f"discover_launchers: PAYLOAD_DIR={PAYLOAD_DIR} pattern={pattern} matches={matches}")
     for path in matches:
         basename = os.path.basename(path)
         if basename == 'launch_bjorn.sh':
@@ -142,13 +142,13 @@ def discover_launchers():
         except Exception as e:
             logger.error(f"discover_launchers: error reading {path}: {e}")
             continue
-        logger.info(f"discover_launchers: {basename} title={title} requires={requires} isdir={os.path.isdir(requires) if requires else 'N/A'}")
+        logger.debug(f"discover_launchers: {basename} title={title} requires={requires} isdir={os.path.isdir(requires) if requires else 'N/A'}")
         if not title:
             continue
         if requires and not os.path.isdir(requires):
             continue
         launchers.append((title, path))
-    logger.info(f"discover_launchers: returning {launchers}")
+    logger.debug(f"discover_launchers: returning {launchers}")
     return launchers
 
 
@@ -174,7 +174,7 @@ class Display:
 
         # Initialize pagerctl
         try:
-            logger.info("Initializing pagerctl display...")
+            logger.debug("Initializing pagerctl display...")
             self.pager = Pager()
             self.pager.init()
             self.pager.set_rotation(rotation)
@@ -182,7 +182,7 @@ class Display:
             self.width = self.pager.width
             self.height = self.pager.height
             self.orientation = "landscape" if rotation == 270 else "portrait"
-            logger.info(f"Pager display initialized: {self.width}x{self.height} ({self.orientation})")
+            logger.debug(f"Pager display initialized: {self.width}x{self.height} ({self.orientation})")
 
             self.shared_data.width = self.width
             self.shared_data.height = self.height
@@ -228,12 +228,12 @@ class Display:
         # Set initial brightness
         try:
             self.pager.set_brightness(self.screen_brightness)
-            logger.info(f"Screen brightness set to {self.screen_brightness}%")
+            logger.debug(f"Screen brightness set to {self.screen_brightness}%")
         except Exception as e:
             logger.debug(f"Could not set brightness: {e}")
 
         self.start_threads()
-        logger.info("Display initialization complete.")
+        logger.debug("Display initialization complete.")
 
     # ------------------------------------------------------------------
     # Layout builder
@@ -343,7 +343,7 @@ class Display:
 
     def handle_input_loop(self):
         """Handle button input - Red button shows pause menu."""
-        logger.info("Input handler: Monitoring for button presses")
+        logger.debug("Input handler: Monitoring for button presses")
         while not self.shared_data.display_should_exit:
             try:
                 # Wait for button press (blocking)
@@ -354,10 +354,10 @@ class Display:
 
                 # Red button (B) - show pause menu
                 if button & self.pager.BTN_B:
-                    logger.info("Red button pressed - showing pause menu")
+                    logger.debug("Red button pressed - showing pause menu")
                     action = self.show_exit_confirmation()
                     if action is None:
-                        logger.info("Back to scanning")
+                        logger.debug("Back to scanning")
                         continue
                     logger.info(f"Menu action: exit code {action}")
                     self.shared_data.should_exit = True
@@ -1131,7 +1131,7 @@ class Display:
 
     def run(self):
         """Main display loop."""
-        logger.info("Starting display main loop...")
+        logger.debug("Starting display main loop...")
 
         while not self.shared_data.display_should_exit:
             try:

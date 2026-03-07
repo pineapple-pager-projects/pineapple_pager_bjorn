@@ -12,5 +12,21 @@
     "image_display_delaymin": 5,
     "image_display_delaymax": 15,
     "comment_delaymin": 8,
-    "comment_delaymax": 20
+    "comment_delaymax": 20,
+    "web": {
+        "bg_dark": "#1a0a1a",
+        "bg_surface": "#251525",
+        "bg_elevated": "#301e30",
+        "accent": "#ff3366",
+        "accent_bright": "#ff5588",
+        "accent_dim": "#cc1144",
+        "text_primary": "#e8dce8",
+        "text_secondary": "#9a8e9a",
+        "text_muted": "#6b566b",
+        "border": "#3a263a",
+        "border_light": "#4a364a",
+        "glow": "0 0 12px rgba(255, 51, 102, 0.25)",
+        "font_title": "'Creepster', 'Impact', sans-serif",
+        "nav_label_display": "Display"
+    }
 }

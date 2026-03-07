@@ -242,6 +242,46 @@ class TimeoutContext:
         return max(0, self.timeout - self.elapsed())
 
 
+def try_connect_with_retries(connect_func, args, attempt_timeout, max_retries,
+                             retry_counter, retry_lock, logger=None):
+    """
+    Try a connection with per-attempt timeout and retry logic.
+
+    Args:
+        connect_func: The connection function (returns True/False)
+        args: Tuple of arguments to pass to connect_func
+        attempt_timeout: Seconds to wait per attempt
+        max_retries: Max retries per credential before aborting
+        retry_counter: dict with 'total' key — shared across all workers
+        retry_lock: threading.Lock for retry_counter
+        logger: Optional logger
+
+    Returns:
+        True  = credentials worked
+        False = auth failed (normal)
+        None  = credential timed out max_retries times (caller should abort)
+    """
+    for attempt in range(max_retries):
+        result = [None]  # None=timeout, True=success, False=auth_fail
+        t = threading.Thread(target=lambda: result.__setitem__(0, connect_func(*args)),
+                             daemon=True)
+        t.start()
+        t.join(timeout=attempt_timeout)
+
+        if result[0] is not None:
+            return result[0]  # Got a response — True or False
+
+        # Timed out — count it
+        with retry_lock:
+            retry_counter['total'] += 1
+            total = retry_counter['total']
+        if logger:
+            logger.warning(f"Attempt timed out ({attempt + 1}/{max_retries}), total retries: {total}")
+
+    # All retries exhausted for this credential
+    return None
+
+
 def with_connection_timeout(connect_func, timeout=30):
     """
     Decorator/wrapper for connection functions that need timeouts.

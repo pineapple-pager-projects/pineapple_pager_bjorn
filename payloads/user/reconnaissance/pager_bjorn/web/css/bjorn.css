@@ -717,20 +717,85 @@ select.form-input {
     background: rgba(76, 175, 80, 0.15);
     color: var(--success);
 }
-.attack-badge.full-success {
-    background: rgba(233, 159, 0, 0.2);
-    color: var(--gold-bright);
+.attack-badge.failed {
+    background: rgba(217, 83, 79, 0.12);
+    color: var(--danger);
 }
-.attack-badge.partial {
-    background: rgba(76, 175, 80, 0.1);
+
+/* Device classification row */
+.host-row-device {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding-left: 20px;
+}
+.host-device-type {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    font-weight: bold;
+    background: rgba(107, 97, 86, 0.15);
+    color: var(--text-secondary);
+}
+.host-vendor {
+    font-size: 10px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+/* Device type color classes */
+.dt-router, .dt-accesspoint, .dt-switch {
+    background: rgba(91, 192, 222, 0.15);
+    color: var(--info);
+}
+.dt-server {
+    background: rgba(76, 175, 80, 0.15);
     color: var(--success);
 }
-.attack-badge.failed {
-    background: rgba(217, 83, 79, 0.1);
-    color: var(--text-muted);
+.dt-workstationpc {
+    background: rgba(91, 192, 222, 0.12);
+    color: #7ec8e3;
 }
-.attack-badge.pending {
-    color: var(--text-muted);
+.dt-printer {
+    background: rgba(156, 106, 222, 0.15);
+    color: #b088e0;
+}
+.dt-cameraipcam {
+    background: rgba(217, 83, 79, 0.15);
+    color: var(--danger);
+}
+.dt-phonemobile, .dt-tablet {
+    background: rgba(233, 159, 0, 0.12);
+    color: var(--gold);
+}
+.dt-iotsmarthome, .dt-smartspeaker {
+    background: rgba(255, 184, 41, 0.12);
+    color: var(--gold-bright);
+}
+.dt-nas {
+    background: rgba(76, 175, 80, 0.12);
+    color: #81c784;
+}
+.dt-tvmedia, .dt-gamingconsole {
+    background: rgba(233, 159, 0, 0.1);
+    color: var(--gold-dim);
+}
+.dt-firewall {
+    background: rgba(217, 83, 79, 0.12);
+    color: #e57373;
+}
+.dt-voipphone {
+    background: rgba(91, 192, 222, 0.12);
+    color: #80deea;
+}
+.dt-evcharger {
+    background: rgba(76, 175, 80, 0.12);
+    color: #a5d6a7;
 }
 
 /* ========================================
@@ -1288,11 +1353,257 @@ select.form-input {
     color: var(--text-secondary);
     opacity: 0.7;
 }
+/* Threat Intelligence Badges */
+.vuln-threat-intel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.kev-badge {
+    display: inline-block;
+    background: rgba(231, 76, 60, 0.2);
+    border: 1px solid #e74c3c;
+    border-radius: 3px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: bold;
+    font-family: monospace;
+    color: #e74c3c;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.ransomware-badge {
+    display: inline-block;
+    background: rgba(142, 36, 36, 0.25);
+    border: 1px solid #8e2424;
+    border-radius: 3px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: bold;
+    font-family: monospace;
+    color: #ff4444;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.cvss-badge {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: bold;
+    font-family: monospace;
+    letter-spacing: 0.5px;
+}
+.cvss-critical {
+    background: rgba(231, 76, 60, 0.2);
+    border: 1px solid #e74c3c;
+    color: #e74c3c;
+}
+.cvss-high {
+    background: rgba(230, 126, 34, 0.2);
+    border: 1px solid #e67e22;
+    color: #e67e22;
+}
+.cvss-medium {
+    background: rgba(241, 196, 15, 0.2);
+    border: 1px solid #f1c40f;
+    color: #f1c40f;
+}
+.cvss-low {
+    background: rgba(46, 204, 113, 0.2);
+    border: 1px solid #2ecc71;
+    color: #2ecc71;
+}
+.required-action {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    border-left: 3px solid #e74c3c;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
 .loading {
     text-align: center;
     padding: 16px;
     color: var(--text-muted);
     font-size: 12px;
+}
+
+/* ========================================
+   Host Profile (Expandable)
+   ======================================== */
+.host-card.expanded {
+    border-color: var(--gold);
+    box-shadow: var(--glow-gold);
+}
+.host-row-services {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+    padding-left: 20px;
+}
+.service-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    background: rgba(91, 192, 222, 0.1);
+    color: var(--info);
+    border: 1px solid rgba(91, 192, 222, 0.2);
+}
+.os-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    background: rgba(76, 175, 80, 0.1);
+    color: var(--success);
+    border: 1px solid rgba(76, 175, 80, 0.2);
+}
+.host-profile {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+.host-profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+.export-btn {
+    background: var(--bg-elevated);
+    color: var(--gold);
+    border: 1px solid var(--gold-dim);
+}
+.export-btn:hover {
+    background: var(--gold);
+    color: var(--bg-dark);
+    border-color: var(--gold);
+}
+.host-profile-section {
+    margin-bottom: 10px;
+}
+.host-profile-section-title {
+    font-family: var(--font-viking);
+    font-size: 13px;
+    color: var(--gold);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.host-profile-row {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 12px;
+}
+.host-profile-label {
+    color: var(--text-muted);
+    min-width: 70px;
+    flex-shrink: 0;
+}
+.host-profile-value {
+    color: var(--text-primary);
+}
+/* Loot Summary Badges */
+.host-loot-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.loot-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    background: rgba(233, 159, 0, 0.08);
+    border: 1px solid var(--gold-dim);
+    color: var(--gold);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.loot-count-badge:hover {
+    background: rgba(233, 159, 0, 0.2);
+    border-color: var(--gold);
+    box-shadow: var(--glow-gold);
+}
+.loot-count-badge.dimmed {
+    opacity: 0.4;
+    border-color: var(--border);
+    color: var(--text-muted);
+    background: transparent;
+}
+.loot-count-badge.dimmed:hover {
+    opacity: 0.7;
+    box-shadow: none;
+}
+.loot-count-num {
+    font-weight: bold;
+    font-family: var(--font-viking);
+    font-size: 14px;
+}
+
+.services-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    font-family: var(--font-body);
+}
+.services-table th {
+    background: var(--bg-elevated);
+    color: var(--gold);
+    font-weight: bold;
+    text-align: left;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+.services-table td {
+    padding: 3px 8px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+.services-table tr:hover td {
+    background: var(--bg-elevated);
+}
+/* Protocol-specific badges */
+.ssl-badge {
+    display: inline-block;
+    background: rgba(91, 192, 222, 0.15);
+    border: 1px solid var(--info);
+    border-radius: 3px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: bold;
+    color: var(--info);
+}
+.dns-badge {
+    display: inline-block;
+    background: rgba(156, 106, 222, 0.15);
+    border: 1px solid #b088e0;
+    border-radius: 3px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: bold;
+    color: #b088e0;
+}
+.snmp-badge {
+    display: inline-block;
+    background: rgba(230, 126, 34, 0.15);
+    border: 1px solid #e67e22;
+    border-radius: 3px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: bold;
+    color: #e67e22;
 }
 
 /* ========================================

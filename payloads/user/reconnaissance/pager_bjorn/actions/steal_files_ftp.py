@@ -30,7 +30,7 @@ class StealFilesFTP:
             self.ftp_connected = False
             self.stop_execution = False
             self.b_parent_action = "brute_force_ftp"  # Parent action status key
-            logger.info("StealFilesFTP initialized")
+            logger.debug("StealFilesFTP initialized")
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
 

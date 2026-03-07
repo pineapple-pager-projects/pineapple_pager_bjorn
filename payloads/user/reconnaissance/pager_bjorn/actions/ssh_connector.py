@@ -14,7 +14,8 @@ from shared import SharedData
 from logger import Logger
 from timeout_utils import (
     join_threads_with_timeout,
-    drain_queue_safely
+    drain_queue_safely,
+    try_connect_with_retries
 )
 
 # Configure the logger
@@ -34,7 +35,7 @@ class SSHBruteforce:
     def __init__(self, shared_data):
         self.shared_data = shared_data
         self.ssh_connector = SSHConnector(shared_data)
-        logger.info("SSHConnector initialized.")
+        logger.debug("SSHConnector initialized.")
 
     def bruteforce_ssh(self, ip, port, mac_address='', hostname=''):
         """
@@ -87,6 +88,9 @@ class SSHConnector:
         self.progress_lock = threading.Lock()
         self.progress_count = 0
         self.progress_total = 0
+        self.retry_counter = {'total': 0}
+        self.retry_lock = threading.Lock()
+        self.abort_flag = threading.Event()
 
     def _load_csv_filtered(self, filepath, port_filter):
         """Load CSV and filter rows containing the specified port."""
@@ -126,11 +130,14 @@ class SSHConnector:
     def worker(self, success_flag):
         """
         Worker thread to process items in the queue.
-        Uses graceful shutdown pattern with timeout on queue.get().
+        Uses per-attempt timeout with retry logic.
         """
+        attempt_timeout = getattr(self.shared_data, 'bruteforce_attempt_timeout', 30)
+        max_retries = getattr(self.shared_data, 'bruteforce_max_retries', 3)
+        max_total = getattr(self.shared_data, 'bruteforce_max_total_retries', 15)
+
         while True:
-            if self.shared_data.orchestrator_should_exit:
-                logger.info("Orchestrator exit signal received, stopping worker thread.")
+            if self.shared_data.orchestrator_should_exit or self.abort_flag.is_set():
                 break
             try:
                 item = self.queue.get(timeout=1.0)
@@ -141,12 +148,31 @@ class SSHConnector:
 
             adresse_ip, user, password, mac_address, hostname, port = item
             try:
-                if self.ssh_connect(adresse_ip, user, password):
+                result = try_connect_with_retries(
+                    self.ssh_connect, (adresse_ip, user, password),
+                    attempt_timeout, max_retries,
+                    self.retry_counter, self.retry_lock, logger)
+
+                if result is None:
+                    # Credential timed out on all retries — host unresponsive
+                    logger.warning(f"SSH brute force aborting for {adresse_ip}: credential timed out {max_retries} times")
+                    self.abort_flag.set()
+                    drain_queue_safely(self.queue)
+                    break
+
+                # Check total retry limit
+                with self.retry_lock:
+                    if self.retry_counter['total'] >= max_total:
+                        logger.warning(f"SSH brute force aborting for {adresse_ip}: {max_total} total retries reached")
+                        self.abort_flag.set()
+                        drain_queue_safely(self.queue)
+                        break
+
+                if result is True:
                     with self.lock:
                         self.results.append([mac_address, adresse_ip, hostname, user, password, port])
                         logger.success(f"Found credentials  IP: {adresse_ip} | User: {user} | Password: {password}")
                         success_flag[0] = True
-                    # File I/O outside lock
                     self.save_results()
                     self.removeduplicates()
                     self.shared_data.record_zombie(mac_address, adresse_ip)
@@ -192,16 +218,10 @@ class SSHConnector:
             t.start()
             threads.append(t)
 
-        # Wait for queue with exit signal checking
-        queue_timeout = self.shared_data.bruteforce_queue_timeout
-        queue_start = time.time()
-        while not self.queue.empty():
+        # Wait for workers to finish (abort logic is inside worker)
+        while not self.queue.empty() and not self.abort_flag.is_set():
             if self.shared_data.orchestrator_should_exit:
                 logger.info("Orchestrator exit signal received, stopping bruteforce.")
-                drain_queue_safely(self.queue)
-                break
-            if time.time() - queue_start > queue_timeout:
-                logger.lifecycle_timeout("SSHBruteforce", "queue processing", queue_timeout, adresse_ip)
                 drain_queue_safely(self.queue)
                 break
             time.sleep(0.5)

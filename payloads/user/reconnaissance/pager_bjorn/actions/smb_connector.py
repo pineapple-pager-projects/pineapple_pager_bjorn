@@ -22,7 +22,8 @@ from timeout_utils import (
     subprocess_with_timeout,
     join_threads_with_timeout,
     drain_queue_safely,
-    run_with_timeout
+    run_with_timeout,
+    try_connect_with_retries
 )
 
 # Configure the logger
@@ -45,7 +46,7 @@ class SMBBruteforce:
     def __init__(self, shared_data):
         self.shared_data = shared_data
         self.smb_connector = SMBConnector(shared_data)
-        logger.info("SMBConnector initialized.")
+        logger.debug("SMBConnector initialized.")
 
     def bruteforce_smb(self, ip, port, mac_address='', hostname=''):
         """
@@ -97,6 +98,9 @@ class SMBConnector:
         self.progress_lock = threading.Lock()
         self.progress_count = 0
         self.progress_total = 0
+        self.retry_counter = {'total': 0}
+        self.retry_lock = threading.Lock()
+        self.abort_flag = threading.Event()
         self.guest_shares = set()  # Shares accessible via guest (to skip during brute force)
 
     def _load_csv_filtered(self, filepath, port_filter):
@@ -298,13 +302,13 @@ class SMBConnector:
         return shares
 
     def worker(self, success_flag):
-        """
-        Worker thread to process items in the queue.
-        Uses graceful shutdown pattern with timeout on queue.get().
-        """
+        """Worker thread with per-attempt timeout and retry logic."""
+        attempt_timeout = getattr(self.shared_data, 'bruteforce_attempt_timeout', 30)
+        max_retries = getattr(self.shared_data, 'bruteforce_max_retries', 3)
+        max_total = getattr(self.shared_data, 'bruteforce_max_total_retries', 15)
+
         while True:
-            if self.shared_data.orchestrator_should_exit:
-                logger.info("Orchestrator exit signal received, stopping worker thread.")
+            if self.shared_data.orchestrator_should_exit or self.abort_flag.is_set():
                 break
             try:
                 item = self.queue.get(timeout=1.0)
@@ -315,9 +319,27 @@ class SMBConnector:
 
             adresse_ip, user, password, mac_address, hostname, port = item
             try:
-                shares = self.smb_connect(adresse_ip, user, password)
+                # _smb_connect_inner returns list (non-None), so try_connect_with_retries works
+                result = try_connect_with_retries(
+                    self._smb_connect_inner, (adresse_ip, user, password),
+                    attempt_timeout, max_retries,
+                    self.retry_counter, self.retry_lock, logger)
+
+                if result is None:
+                    logger.warning(f"SMB brute force aborting for {adresse_ip}: credential timed out {max_retries} times")
+                    self.abort_flag.set()
+                    drain_queue_safely(self.queue)
+                    break
+
+                with self.retry_lock:
+                    if self.retry_counter['total'] >= max_total:
+                        logger.warning(f"SMB brute force aborting for {adresse_ip}: {max_total} total retries reached")
+                        self.abort_flag.set()
+                        drain_queue_safely(self.queue)
+                        break
+
+                shares = result  # list of share names
                 if shares:
-                    # Collect results under lock
                     new_results = []
                     for share in shares:
                         if share not in IGNORED_SHARES:
@@ -329,14 +351,12 @@ class SMBConnector:
                             self.results.extend(new_results)
                             success_flag[0] = True
 
-                        # File I/O outside lock to reduce contention
                         self.save_results()
                         self.removeduplicates()
             finally:
                 self.queue.task_done()
                 with self.progress_lock:
                     self.progress_count += 1
-                    # Log progress less frequently to reduce log spam
                     if self.progress_count % 100 == 0:
                         logger.info(f"SMB brute force: {self.progress_count}/{self.progress_total}")
 
@@ -435,26 +455,16 @@ class SMBConnector:
             t.start()
             threads.append(t)
 
-        # Wait for queue with exit signal checking
-        queue_timeout = self.shared_data.bruteforce_queue_timeout
-        queue_start = time.time()
-        while not self.queue.empty():
+        # Wait for workers to finish (abort logic is inside worker)
+        while not self.queue.empty() and not self.abort_flag.is_set():
             if self.shared_data.orchestrator_should_exit:
                 logger.info("Orchestrator exit signal received, stopping bruteforce.")
                 drain_queue_safely(self.queue)
                 break
-            if time.time() - queue_start > queue_timeout:
-                logger.lifecycle_timeout("SMBBruteforce", "queue processing", queue_timeout, adresse_ip)
-                drain_queue_safely(self.queue)
-                break
             time.sleep(0.5)
 
-        # Wait for queue to finish with timeout
-        try:
-            # Give workers time to finish current items
-            time.sleep(2)
-        except:
-            pass
+        # Give workers time to finish current items
+        time.sleep(2)
 
         # Join threads with timeout
         hanging = join_threads_with_timeout(threads, timeout=10, logger=logger)

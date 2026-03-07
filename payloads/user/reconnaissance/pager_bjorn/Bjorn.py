@@ -160,10 +160,10 @@ def handle_exit(sig, frame, display_thread, bjorn_thread, web_thread=None):
 
 
 if __name__ == "__main__":
-    logger.info("Starting threads")
+    logger.debug("Starting threads")
 
     try:
-        logger.info("Loading shared data config...")
+        logger.debug("Loading shared data config...")
         shared_data.load_config()
 
         logger.info("Starting display thread...")

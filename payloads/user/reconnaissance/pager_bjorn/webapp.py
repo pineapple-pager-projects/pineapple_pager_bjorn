@@ -79,9 +79,16 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.web_utils.serve_stats(self)
         elif self.path == '/api/vulnerabilities':
             self.web_utils.serve_vulnerabilities(self)
+        elif self.path.startswith('/api/host_loot_summary/'):
+            ip = self.path.split('/api/host_loot_summary/')[1]
+            self.web_utils.serve_host_loot_summary(self, ip)
         elif self.path.startswith('/api/vulnerabilities/'):
             ip = self.path.split('/api/vulnerabilities/')[1]
             self.web_utils.serve_vulnerability_detail(self, ip)
+        elif self.path == '/api/theme':
+            self.web_utils.serve_theme(self)
+        elif self.path == '/api/theme_font':
+            self.web_utils.serve_theme_font(self)
         elif self.path == '/load_config':
             self.web_utils.serve_current_config(self)
         elif self.path == '/restore_default_config':
@@ -132,6 +139,9 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.web_utils.list_files_endpoint(self)
         elif self.path.startswith('/download_file'):
             self.web_utils.download_file(self)
+        elif self.path.startswith('/api/export_host/'):
+            ip = self.path.split('/api/export_host/')[1]
+            self.web_utils.export_host_report(self, ip)
         elif self.path.startswith('/download_backup'):
             self.web_utils.download_backup(self)
         elif self.path == '/list_logs':
@@ -189,6 +199,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.web_utils.add_manual_target(self)
         elif self.path == '/api/terminal':
             self.web_utils.execute_terminal_command(self)
+        elif self.path == '/api/update_kev':
+            self.web_utils.update_kev_catalog(self)
         else:
             self.send_response(404)
             self.end_headers()

@@ -130,7 +130,9 @@ const ConfigTab = {
         // Performance
         'worker_threads': 'Concurrent Brute Force Threads',
         'max_failed_retries': 'Max Retries Before Giving Up',
-        'bruteforce_queue_timeout': 'Brute Force Timeout per Host (seconds)',
+        'bruteforce_attempt_timeout': 'Brute Force Per-Attempt Timeout (seconds)',
+        'bruteforce_max_retries': 'Brute Force Max Retries per Credential',
+        'bruteforce_max_total_retries': 'Brute Force Max Total Retries Before Abort',
         'displaying_csv': 'Save Detailed Scan Results to CSV',
 
         // Logging
@@ -146,6 +148,10 @@ const ConfigTab = {
         'screen_dim_timeout': 'Dim Screen After Inactivity (seconds)',
 
         // Theme
+        'os_detection': 'Enable OS Fingerprinting (nmap -O)',
+        'enable_vulners_lookup': 'Enable Vulners.com CVE Lookup (auto-detects internet)',
+        'scan_enumeration': 'Enable Service Enumeration (SMB shares, SSH algos, etc.)',
+
         'override_theme_delays': 'Override Theme Animation Delays',
         'override_theme_comment_delays': 'Override Theme Comment Delays'
     },

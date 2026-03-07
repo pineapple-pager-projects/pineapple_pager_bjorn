@@ -65,7 +65,9 @@
     "__title_performance__": "Performance",
     "worker_threads": 5,
     "max_failed_retries": 3,
-    "bruteforce_queue_timeout": 600,
+    "bruteforce_attempt_timeout": 30,
+    "bruteforce_max_retries": 3,
+    "bruteforce_max_total_retries": 15,
     "displaying_csv": true,
 
     "__title_logging__": "Logging",

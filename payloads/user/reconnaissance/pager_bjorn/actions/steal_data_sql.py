@@ -27,7 +27,7 @@ class StealDataSQL:
             self.sql_connected = False
             self.stop_execution = False
             self.b_parent_action = "brute_force_sql"  # Parent action status key
-            logger.info("StealDataSQL initialized.")
+            logger.debug("StealDataSQL initialized.")
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
 

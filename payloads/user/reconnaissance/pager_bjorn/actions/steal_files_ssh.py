@@ -30,7 +30,7 @@ class StealFilesSSH:
             self.ssh_connected = False  # Set when SSH connects (before SFTP)
             self.stop_execution = False
             self.b_parent_action = "brute_force_ssh"  # Parent action status key
-            logger.info("StealFilesSSH initialized")
+            logger.debug("StealFilesSSH initialized")
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
 

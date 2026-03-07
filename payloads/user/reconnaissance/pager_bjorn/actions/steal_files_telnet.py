@@ -30,7 +30,7 @@ class StealFilesTelnet:
             self.telnet_connected = False
             self.stop_execution = False
             self.b_parent_action = "brute_force_telnet"  # Parent action status key
-            logger.info("StealFilesTelnet initialized")
+            logger.debug("StealFilesTelnet initialized")
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
 

@@ -37,6 +37,19 @@ const LootTab = {
         });
     },
 
+    activateSubTab(sub) {
+        const panel = document.getElementById('tab-loot');
+        if (!panel) return;
+        const btn = panel.querySelector('.sub-tab[data-sub="' + sub + '"]');
+        if (!btn) return;
+        panel.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+        panel.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('loot-' + sub).classList.add('active');
+        this.activeSubTab = sub;
+        this.refresh();
+    },
+
     activate() {
         App.startPolling('loot', () => this.refresh(), 10000);
     },
@@ -157,8 +170,12 @@ const LootTab = {
                 return;
             }
 
+            let headerExtra = '';
+            if (data.kev_count > 0) {
+                headerExtra = ' <span class="kev-badge">' + data.kev_count + ' KNOWN EXPLOITED</span>';
+            }
             let html = '<div class="vuln-header">' +
-                '<span class="vuln-stat">' + data.total_count + ' unique vulnerabilities across ' + data.hosts_scanned + ' hosts</span>' +
+                '<span class="vuln-stat">' + data.total_count + ' unique vulnerabilities across ' + data.hosts_scanned + ' hosts' + headerExtra + '</span>' +
                 '</div>';
             html += '<table class="data-table vuln-table"><thead><tr>' +
                 '<th>IP</th><th>Hostname</th><th>Ports</th><th>Vulnerabilities</th>' +
@@ -225,6 +242,27 @@ const LootTab = {
                             html += '<div class="vuln-state ' + stateClass + '">' + this.escapeHtml(f.state);
                             if (f.risk) html += ' &mdash; Risk: ' + this.escapeHtml(f.risk);
                             html += '</div>';
+                            // Threat intel badges (KEV, ransomware, CVSS)
+                            if (f.kev || f.cvss_score != null) {
+                                html += '<div class="vuln-threat-intel">';
+                                if (f.kev) {
+                                    html += '<span class="kev-badge">KNOWN EXPLOITED</span>';
+                                }
+                                if (f.ransomware_use === 'Known') {
+                                    html += '<span class="ransomware-badge">RANSOMWARE</span>';
+                                }
+                                if (f.cvss_score != null) {
+                                    let cvssClass = 'cvss-low';
+                                    if (f.cvss_score >= 9.0) cvssClass = 'cvss-critical';
+                                    else if (f.cvss_score >= 7.0) cvssClass = 'cvss-high';
+                                    else if (f.cvss_score >= 4.0) cvssClass = 'cvss-medium';
+                                    html += '<span class="cvss-badge ' + cvssClass + '">CVSS ' + f.cvss_score + '</span>';
+                                }
+                                html += '</div>';
+                            }
+                            if (f.required_action) {
+                                html += '<div class="required-action">' + this.escapeHtml(f.required_action) + '</div>';
+                            }
                             // CVEs
                             if (f.cves && f.cves.length) {
                                 html += '<div class="vuln-cves">' + f.cves.map(c => '<span class="vuln-cve-tag">' + this.escapeHtml(c) + '</span>').join(' ') + '</div>';

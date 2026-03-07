@@ -279,6 +279,10 @@ class WebUtils:
                     'hostname': row.get('Hostnames', ''),
                     'alive': row.get('Alive', ''),
                     'ports': row.get('Ports', ''),
+                    'services': row.get('Services', ''),
+                    'os': row.get('OS', ''),
+                    'vendor': row.get('Vendor', ''),
+                    'device_type': row.get('Device Type', ''),
                     'actions': actions_data
                 })
 
@@ -817,6 +821,83 @@ class WebUtils:
             handler.end_headers()
             handler.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
 
+    def serve_host_loot_summary(self, handler, ip):
+        """Return per-host loot counts: vulns, credentials, stolen_files."""
+        try:
+            # --- Vuln count ---
+            vuln_count = 0
+            vuln_dir = self.shared_data.vulnerabilities_dir
+            if os.path.exists(vuln_dir):
+                for fname in os.listdir(vuln_dir):
+                    if fname.endswith('_vuln_details.json') and ip in fname:
+                        try:
+                            with open(os.path.join(vuln_dir, fname), 'r', encoding='utf-8') as f:
+                                findings = json.load(f)
+                            vuln_count = len(findings)
+                        except Exception:
+                            pass
+                        break
+
+            # --- Credential count ---
+            cred_count = 0
+            cred_dir = self.shared_data.crackedpwddir
+            if os.path.exists(cred_dir):
+                for fname in sorted(os.listdir(cred_dir)):
+                    if not fname.endswith('.csv'):
+                        continue
+                    fpath = os.path.join(cred_dir, fname)
+                    try:
+                        with open(fpath, 'r', encoding='utf-8') as f:
+                            for row in csv.DictReader(f):
+                                if row.get('IP Address', '') == ip:
+                                    cred_count += 1
+                    except Exception:
+                        pass
+
+            # --- Stolen file count ---
+            stolen_count = 0
+            stolen_dir = self.shared_data.datastolendir
+            if os.path.exists(stolen_dir):
+                # Need MAC for directory prefix — look up from netkb
+                mac = ''
+                netkb = self.shared_data.netkbfile
+                if os.path.exists(netkb):
+                    try:
+                        with open(netkb, 'r', encoding='utf-8') as f:
+                            for row in csv.DictReader(f):
+                                row_ip = row.get('IPs', row.get('IP Address', ''))
+                                if row_ip == ip:
+                                    mac = row.get('MAC Address', '')
+                                    break
+                    except Exception:
+                        pass
+                if mac:
+                    dir_prefix = f'{mac}_{ip}'
+                    for proto_name in ('ssh', 'ftp', 'smb', 'sql', 'telnet'):
+                        proto_dir = os.path.join(stolen_dir, proto_name)
+                        if not os.path.isdir(proto_dir):
+                            continue
+                        for dname in os.listdir(proto_dir):
+                            if not dname.startswith(dir_prefix):
+                                continue
+                            host_dir = os.path.join(proto_dir, dname)
+                            if not os.path.isdir(host_dir):
+                                continue
+                            for root, dirs, files in os.walk(host_dir):
+                                stolen_count += len(files)
+
+            result = {"vulns": vuln_count, "credentials": cred_count, "stolen_files": stolen_count}
+            handler.send_response(200)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps(result).encode('utf-8'))
+        except Exception as e:
+            self.logger.error(f"Error in host_loot_summary for {ip}: {e}")
+            handler.send_response(500)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+
     def serve_vulnerabilities(self, handler):
         """Serve vulnerability scan results as JSON."""
         try:
@@ -845,17 +926,26 @@ class WebUtils:
                     if v.strip():
                         all_vulns.add(v.strip())
 
-            # List available detail files
+            # List available detail files and count KEV findings
             detail_files = []
+            kev_count = 0
             if os.path.exists(vuln_dir):
                 for f in os.listdir(vuln_dir):
                     if f.endswith('_vuln_scan.txt'):
                         detail_files.append(f)
+                    elif f.endswith('_vuln_details.json'):
+                        try:
+                            with open(os.path.join(vuln_dir, f), 'r') as fh:
+                                details = json.load(fh)
+                            kev_count += sum(1 for d in details if d.get('kev'))
+                        except Exception:
+                            pass
 
             response = {
                 "summary": summary,
                 "total_count": len(all_vulns),
                 "hosts_scanned": len(summary),
+                "kev_count": kev_count,
                 "detail_files": detail_files
             }
 
@@ -890,14 +980,35 @@ class WebUtils:
                 handler.send_response(200)
                 handler.send_header("Content-type", "application/json")
                 handler.end_headers()
-                handler.wfile.write(json.dumps({"ip": ip, "findings": details}).encode('utf-8'))
+                handler.wfile.write(json.dumps({"ip": ip, "findings": details, "scanned": True}).encode('utf-8'))
             else:
-                handler.send_response(404)
+                # Return 200 with empty findings — no scan done yet
+                handler.send_response(200)
                 handler.send_header("Content-type", "application/json")
                 handler.end_headers()
-                handler.wfile.write(json.dumps({"status": "error", "message": f"No detail found for {ip}"}).encode('utf-8'))
+                handler.wfile.write(json.dumps({"ip": ip, "findings": [], "scanned": False}).encode('utf-8'))
         except Exception as e:
             self.logger.error(f"Error serving vulnerability detail: {e}")
+            handler.send_response(500)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+
+    def update_kev_catalog(self, handler):
+        """Download fresh CISA KEV catalog."""
+        try:
+            from cve_lookup import KevDatabase
+            kev_path = os.path.join(self.shared_data.currentdir, 'data', 'kev_catalog.json')
+            kev_db = KevDatabase(kev_path)
+            success = kev_db.update()
+            status_code = 200 if success else 500
+            msg = f"KEV catalog updated: {kev_db.count} entries" if success else "Failed to update KEV catalog"
+            handler.send_response(status_code)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({"status": "ok" if success else "error", "message": msg, "count": kev_db.count}).encode('utf-8'))
+        except Exception as e:
+            self.logger.error(f"Error updating KEV catalog: {e}")
             handler.send_response(500)
             handler.send_header("Content-type", "application/json")
             handler.end_headers()
@@ -1378,6 +1489,75 @@ class WebUtils:
         except FileNotFoundError:
             handler.send_response(404)
             handler.end_headers()
+
+    def serve_theme(self, handler):
+        """Serve the active theme's web palette as JSON."""
+        theme_name = self.shared_data.config.get("theme", "bjorn")
+        theme_dir = os.path.join(self.shared_data.currentdir, "themes", theme_name)
+        theme_json_path = os.path.join(theme_dir, "theme.json")
+
+        # Default web palette (bjorn/viking)
+        web = {
+            "bg_dark": "#1a1510",
+            "bg_surface": "#231e17",
+            "bg_elevated": "#2e261d",
+            "accent": "#e99f00",
+            "accent_bright": "#ffb829",
+            "accent_dim": "#b87d00",
+            "text_primary": "#e8e0d4",
+            "text_secondary": "#9a8e7e",
+            "text_muted": "#6b6156",
+            "border": "#3a3226",
+            "border_light": "#4a4236",
+            "glow": "0 0 12px rgba(233, 159, 0, 0.25)",
+            "font_title": "'Viking', 'Georgia', serif",
+            "nav_label_display": "Display"
+        }
+        web_title = self.shared_data.web_title
+
+        try:
+            with open(theme_json_path, 'r') as f:
+                theme_data = json.load(f)
+            if "web" in theme_data:
+                web = theme_data["web"]
+            web_title = theme_data.get("web_title", web_title)
+        except (FileNotFoundError, json.JSONDecodeError, IOError):
+            pass
+
+        response = json.dumps({
+            "theme_name": theme_name,
+            "web_title": web_title,
+            "font_url": "/api/theme_font",
+            "web": web
+        })
+        handler.send_response(200)
+        handler.send_header("Content-Type", "application/json")
+        handler.send_header("Cache-Control", "no-cache")
+        handler.end_headers()
+        handler.wfile.write(response.encode('utf-8'))
+
+    def serve_theme_font(self, handler):
+        """Serve the active theme's title font file."""
+        theme_name = self.shared_data.config.get("theme", "bjorn")
+        theme_dir = os.path.join(self.shared_data.currentdir, "themes", theme_name)
+
+        # Try both .TTF and .ttf
+        font_path = os.path.join(theme_dir, "fonts", "title.TTF")
+        if not os.path.isfile(font_path):
+            font_path = os.path.join(theme_dir, "fonts", "title.ttf")
+
+        if os.path.isfile(font_path):
+            handler.send_response(200)
+            handler.send_header("Content-Type", "font/truetype")
+            handler.send_header("Cache-Control", "public, max-age=3600")
+            handler.end_headers()
+            with open(font_path, 'rb') as f:
+                handler.wfile.write(f.read())
+        else:
+            handler.send_response(404)
+            handler.send_header("Content-Type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(b'{"error": "Theme font not found"}')
 
     def scan_wifi(self, handler):
         try:
@@ -1921,7 +2101,7 @@ method=auto
 
             with open(fichier, 'w') as f:
                 json.dump(current_config, f, indent=4)
-            self.logger.info("Configuration saved to file")
+            self.logger.debug("Configuration saved to file")
 
             handler.send_response(200)
             handler.send_header('Content-type', 'application/json')
@@ -2127,6 +2307,198 @@ method=auto
                 handler.send_response(404)
                 handler.end_headers()
         except Exception as e:
+            handler.send_response(500)
+            handler.send_header("Content-type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+
+    def export_host_report(self, handler, ip):
+        """Generate and serve a plain-text intelligence report for a single host."""
+        try:
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            lines = []
+            W = 55  # ruler width
+
+            lines.append('=' * W)
+            lines.append(f' HOST REPORT: {ip}')
+            lines.append(f' Generated: {now}')
+            lines.append('=' * W)
+            lines.append('')
+
+            # --- Host info from netkb.csv ---
+            host = {}
+            netkb = self.shared_data.netkbfile
+            if os.path.exists(netkb):
+                with open(netkb, 'r', encoding='utf-8') as f:
+                    for row in csv.DictReader(f):
+                        row_ip = row.get('IPs', row.get('IP Address', ''))
+                        if row_ip == ip:
+                            host = row
+                            break
+
+            lines.append(f'--- HOST INFO {"-" * (W - 14)}')
+            lines.append(f'{"IP:":<13}{ip}')
+            lines.append(f'{"Hostname:":<13}{host.get("Hostnames", "")}')
+            lines.append(f'{"MAC:":<13}{host.get("MAC Address", "")}')
+            lines.append(f'{"Vendor:":<13}{host.get("Vendor", "")}')
+            lines.append(f'{"Device Type:":<13}{host.get("Device Type", "")}')
+            lines.append(f'{"OS:":<13}{host.get("OS", "")}')
+            lines.append(f'{"Status:":<13}{"ALIVE" if host.get("Alive") == "1" else "DOWN"}')
+            lines.append('')
+
+            # --- Open ports & services ---
+            services_str = host.get('Services', '')
+            if services_str:
+                parts = [s.strip() for s in services_str.split(';') if s.strip()]
+                valid = []
+                for part in parts:
+                    sp = part.split(':', 1)
+                    port_num = sp[0].strip()
+                    if port_num and port_num.isdigit():
+                        svc_info = sp[1] if len(sp) > 1 else ''
+                        slash_idx = svc_info.find('/')
+                        if slash_idx != -1:
+                            svc_name = svc_info[:slash_idx]
+                            version = svc_info[slash_idx + 1:]
+                        else:
+                            svc_name = svc_info
+                            version = ''
+                        valid.append((f'{port_num}/tcp', svc_name, version))
+                if valid:
+                    lines.append(f'--- OPEN PORTS & SERVICES {"-" * (W - 25)}')
+                    lines.append(f'{"PORT":<10}{"SERVICE":<17}VERSION')
+                    for p, s, v in valid:
+                        lines.append(f'{p:<10}{s:<17}{v}')
+                    lines.append('')
+
+            # --- Credentials ---
+            cred_dir = self.shared_data.crackedpwddir
+            cred_lines = []
+            if os.path.exists(cred_dir):
+                for fname in sorted(os.listdir(cred_dir)):
+                    if not fname.endswith('.csv'):
+                        continue
+                    proto = fname.replace('.csv', '').upper()
+                    fpath = os.path.join(cred_dir, fname)
+                    try:
+                        with open(fpath, 'r', encoding='utf-8') as f:
+                            for row in csv.DictReader(f):
+                                if row.get('IP Address', '') == ip:
+                                    user = row.get('User', '')
+                                    pw = row.get('Password', '')
+                                    port = row.get('Port', '')
+                                    extra = ''
+                                    if row.get('Share'):
+                                        extra = f', share: {row["Share"]}'
+                                    if row.get('Database'):
+                                        extra = f', db: {row["Database"]}'
+                                    cred_lines.append(f'[{proto}] {user}:{pw} (port {port}{extra})')
+                    except Exception:
+                        pass
+            if cred_lines:
+                lines.append(f'--- CREDENTIALS {"-" * (W - 16)}')
+                lines.extend(cred_lines)
+                lines.append('')
+
+            # --- Vulnerabilities ---
+            vuln_dir = self.shared_data.vulnerabilities_dir
+            vuln_lines = []
+            if os.path.exists(vuln_dir):
+                for fname in os.listdir(vuln_dir):
+                    if fname.endswith('_vuln_details.json') and ip in fname:
+                        try:
+                            with open(os.path.join(vuln_dir, fname), 'r', encoding='utf-8') as f:
+                                findings = json.load(f)
+                            for f_item in findings:
+                                severity = 'INFO'
+                                cvss = f_item.get('cvss_score')
+                                if cvss is not None:
+                                    if cvss >= 9.0:
+                                        severity = 'CRITICAL'
+                                    elif cvss >= 7.0:
+                                        severity = 'HIGH'
+                                    elif cvss >= 4.0:
+                                        severity = 'MEDIUM'
+                                    else:
+                                        severity = 'LOW'
+                                cves = ', '.join(f_item.get('cves', []))
+                                title = f_item.get('title', 'Unknown')
+                                cvss_str = f' (CVSS {cvss})' if cvss is not None else ''
+                                vuln_lines.append(f'[{severity}] {cves + " — " if cves else ""}{title}{cvss_str}')
+                                if f_item.get('port'):
+                                    svc = f' ({f_item["service"]})' if f_item.get('service') else ''
+                                    vuln_lines.append(f'  Port: {f_item["port"]}{svc}')
+                                state = f_item.get('state', '')
+                                if state:
+                                    vuln_lines.append(f'  State: {state}')
+                                if f_item.get('kev'):
+                                    vuln_lines.append('  CISA KEV: Yes — Known Exploited')
+                                if f_item.get('ransomware_use') == 'Known':
+                                    vuln_lines.append('  Ransomware: Known Use')
+                                desc = f_item.get('description', '')
+                                if desc:
+                                    vuln_lines.append(f'  {desc[:200]}')
+                                vuln_lines.append('')
+                        except Exception:
+                            pass
+                        break
+            if vuln_lines:
+                lines.append(f'--- VULNERABILITIES {"-" * (W - 20)}')
+                lines.extend(vuln_lines)
+
+            # --- Attack results ---
+            action_columns = [
+                'SSHBruteforce', 'FTPBruteforce', 'TelnetBruteforce',
+                'SMBBruteforce', 'RDPBruteforce', 'SQLBruteforce',
+                'StealFilesSSH', 'StealFilesFTP', 'StealFilesTelnet',
+                'StealFilesSMB', 'StealDataSQL', 'NmapVulnScanner'
+            ]
+            attack_lines = []
+            for col in action_columns:
+                val = host.get(col, '')
+                if val:
+                    attack_lines.append(f'{col + ":":<22}{val}')
+            if attack_lines:
+                lines.append(f'--- ATTACK RESULTS {"-" * (W - 19)}')
+                lines.extend(attack_lines)
+                lines.append('')
+
+            # --- Stolen files ---
+            stolen_dir = self.shared_data.datastolendir
+            stolen_lines = []
+            mac = host.get('MAC Address', '')
+            if os.path.exists(stolen_dir) and mac:
+                dir_prefix = f'{mac}_{ip}'
+                for proto_name in ('ssh', 'ftp', 'smb', 'sql', 'telnet'):
+                    proto_dir = os.path.join(stolen_dir, proto_name)
+                    if not os.path.isdir(proto_dir):
+                        continue
+                    for dname in os.listdir(proto_dir):
+                        if not dname.startswith(dir_prefix):
+                            continue
+                        host_dir = os.path.join(proto_dir, dname)
+                        if not os.path.isdir(host_dir):
+                            continue
+                        for root, dirs, files in os.walk(host_dir):
+                            for fname in files:
+                                rel = os.path.relpath(os.path.join(root, fname), host_dir)
+                                stolen_lines.append(f'[{proto_name.upper()}] {rel}')
+            if stolen_lines:
+                lines.append(f'--- STOLEN FILES {"-" * (W - 17)}')
+                lines.extend(stolen_lines)
+                lines.append('')
+
+            report = '\n'.join(lines)
+            report_bytes = report.encode('utf-8')
+            safe_ip = ip.replace(':', '_')  # handle IPv6 if ever
+            handler.send_response(200)
+            handler.send_header("Content-Type", "text/plain; charset=utf-8")
+            handler.send_header("Content-Disposition", f'attachment; filename="host_report_{safe_ip}.txt"')
+            handler.send_header("Content-Length", str(len(report_bytes)))
+            handler.end_headers()
+            handler.wfile.write(report_bytes)
+        except Exception as e:
+            self.logger.error(f"Error exporting host report for {ip}: {e}")
             handler.send_response(500)
             handler.send_header("Content-type", "application/json")
             handler.end_headers()

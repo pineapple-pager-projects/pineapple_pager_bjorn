@@ -42,7 +42,7 @@ class StealFilesSMB:
             self.smb_connected = False
             self.stop_execution = False
             self.b_parent_action = "brute_force_smb"  # Parent action status key
-            logger.info("StealFilesSMB initialized")
+            logger.debug("StealFilesSMB initialized")
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
 
