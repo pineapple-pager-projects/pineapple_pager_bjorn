@@ -216,6 +216,7 @@ class Display:
         self.manual_mode_txt = "M" if self.shared_data.manual_mode else "A"
         self.last_led_status = None
         self.dialog_showing = False  # Flag to pause display updates during dialogs
+        self._fb_lock = threading.Lock()  # Protect framebuffer from concurrent access
         self._cleaned_up = False
 
         # Brightness/dim settings
@@ -398,7 +399,9 @@ class Display:
         """Portrait pause menu - buttons remapped for sideways holding.
         Physical LEFT/RIGHT = navigate, DOWN/UP = adjust selected item."""
         self.dialog_showing = True
-        time.sleep(0.2)
+        # Acquire framebuffer lock to ensure display thread is done rendering
+        self._fb_lock.acquire()
+        self._fb_lock.release()
 
         current_brightness = self.pager.get_brightness()
         if current_brightness < 0:
@@ -536,7 +539,9 @@ class Display:
         """Landscape pause menu - natural button directions.
         UP/DOWN = navigate, LEFT/RIGHT = adjust selected item."""
         self.dialog_showing = True
-        time.sleep(0.2)
+        # Acquire framebuffer lock to ensure display thread is done rendering
+        self._fb_lock.acquire()
+        self._fb_lock.release()
 
         current_brightness = self.pager.get_brightness()
         if current_brightness < 0:
@@ -1116,17 +1121,16 @@ class Display:
         """Render complete frame."""
         if self.dialog_showing:
             return
-
-        self.pager.clear(self.BG_COLOR)
-
-        self.draw_header()
-        self.draw_stats_grid()
-        self.draw_status_area()
-        self.draw_dialogue_zone()
-        self.draw_frise()
-        self.draw_character_and_corner_stats()
-
-        if not self.dialog_showing:
+        with self._fb_lock:
+            if self.dialog_showing:
+                return
+            self.pager.clear(self.BG_COLOR)
+            self.draw_header()
+            self.draw_stats_grid()
+            self.draw_status_area()
+            self.draw_dialogue_zone()
+            self.draw_frise()
+            self.draw_character_and_corner_stats()
             self.pager.flip()
 
     def run(self):
