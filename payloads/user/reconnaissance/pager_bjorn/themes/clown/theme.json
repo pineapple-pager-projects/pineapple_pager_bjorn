@@ -1,6 +1,9 @@
 {
     "display_name": "ClownSec",
     "menu_title": "ClownSec",
+    "show_menu_title": false,
+    "show_settings_title": false,
+    "show_pause_title": false,
     "web_title": "ClownSec Clown",
     "bg_color": [255, 255, 255],
     "text_color": [0, 0, 0],
@@ -13,6 +16,27 @@
     "image_display_delaymax": 15,
     "comment_delaymin": 8,
     "comment_delaymax": 20,
+    "moods": {
+        "target": "Psychotic",
+        "swarm": "Silly",
+        "recon": "Mime Mode"
+    },
+    "menu_colors": {
+        "bg": [35, 20, 25],
+        "title": [220, 180, 60],
+        "selected": [240, 200, 80],
+        "unselected": [190, 160, 130],
+        "on": [200, 170, 60],
+        "off": [160, 60, 60],
+        "dim": [110, 85, 80],
+        "warning": [220, 100, 50],
+        "submenu": [220, 180, 60]
+    },
+    "pause_menu_colors": {
+        "bg": [35, 20, 25],
+        "text": [240, 200, 80],
+        "accent": [140, 100, 80]
+    },
     "web": {
         "bg_dark": "#1a0a1a",
         "bg_surface": "#251525",

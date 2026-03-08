@@ -1,6 +1,9 @@
 {
     "display_name": "BJORN",
     "menu_title": "BJORN",
+    "show_menu_title": false,
+    "show_settings_title": false,
+    "show_pause_title": false,
     "web_title": "Bjorn Cyberviking",
     "bg_color": [255, 255, 255],
     "text_color": [0, 0, 0],
@@ -13,6 +16,30 @@
     "image_display_delaymax": 8,
     "comment_delaymin": 15,
     "comment_delaymax": 30,
+    "moods": {
+        "target": "Raiding",
+        "swarm": "Berserker",
+        "recon": "Scouting"
+    },
+    "menu_colors": {
+        "bg": [30, 25, 20],
+        "title": [210, 180, 120],
+        "selected": [230, 195, 130],
+        "unselected": [170, 155, 135],
+        "on": [180, 160, 100],
+        "off": [140, 90, 70],
+        "dim": [100, 90, 75],
+        "warning": [200, 130, 60],
+        "submenu": [210, 180, 120]
+    },
+    "pause_menu_colors": {
+        "bg": [30, 25, 20],
+        "text": [210, 190, 150],
+        "accent": [140, 120, 90],
+        "main_menu": [180, 150, 80],
+        "launcher": [120, 140, 160],
+        "exit": [160, 70, 50]
+    },
     "web": {
         "bg_dark": "#1a1510",
         "bg_surface": "#231e17",

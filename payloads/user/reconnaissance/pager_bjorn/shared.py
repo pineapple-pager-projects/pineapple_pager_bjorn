@@ -836,6 +836,9 @@ class SharedData:
         self.theme_title_font_color = None
         self.theme_title_font_size = None
         self.theme_title_y_offset = 0
+        self.theme_moods = {}
+        self.theme_pause_menu_colors = {}
+        self.theme_show_pause_title = True
 
         # Load theme.json if the theme directory exists
         theme_json_path = os.path.join(theme_dir, "theme.json")
@@ -860,6 +863,9 @@ class SharedData:
                 self.theme_title_font_color = theme_data.get("title_font_color", None)
                 self.theme_title_font_size = theme_data.get("title_font_size", None)
                 self.theme_title_y_offset = theme_data.get("title_y_offset", 0)
+                self.theme_moods = theme_data.get("moods", {})
+                self.theme_pause_menu_colors = theme_data.get("pause_menu_colors", {})
+                self.theme_show_pause_title = theme_data.get("show_pause_title", True)
                 logger.debug(f"Loaded theme '{theme_name}': display_name='{self.display_name}'")
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Error reading theme.json for '{theme_name}': {e}")
@@ -871,6 +877,15 @@ class SharedData:
         if os.path.isfile(theme_font):
             self.font_viking_path = theme_font
             logger.debug(f"Theme font: {theme_font}")
+
+        # Override menu body font if theme provides one
+        self.font_menu_path = self.font_arial_path
+        for fname in ('menu.ttf', 'menu.TTF', 'menu.otf'):
+            mf = os.path.join(theme_dir, 'fonts', fname)
+            if os.path.isfile(mf):
+                self.font_menu_path = mf
+                logger.debug(f"Theme menu font: {mf}")
+                break
 
         # Override static images (icons, frise, etc.) if theme provides them
         theme_images_dir = os.path.join(theme_dir, "images")

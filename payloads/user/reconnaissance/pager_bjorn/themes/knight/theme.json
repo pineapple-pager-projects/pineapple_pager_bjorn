@@ -13,6 +13,11 @@
     "image_display_delaymax": 6,
     "comment_delaymin": 15,
     "comment_delaymax": 30,
+    "moods": {
+        "target": "Crusading",
+        "swarm": "Berserker",
+        "recon": "Chivalrous"
+    },
     "web": {
         "bg_dark": "#12151a",
         "bg_surface": "#1a1e25",

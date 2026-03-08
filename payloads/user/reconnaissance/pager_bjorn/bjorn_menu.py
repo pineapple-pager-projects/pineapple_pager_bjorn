@@ -82,12 +82,14 @@ class BjornMenu:
         self.available_themes = self._discover_themes()
         self.active_theme = 'bjorn'
         self.display_landscape = True  # Default: landscape (rotation=270)
+        self.web_ui = True  # Default: web UI enabled
         try:
             with open(self.config_path, 'r') as f:
                 cfg = json.load(f)
             self.scan_prefix = cfg.get('scan_network_prefix', 24)
             self.active_theme = cfg.get('theme', 'bjorn')
             self.display_landscape = cfg.get('screen_rotation', 270) == 270
+            self.web_ui = cfg.get('web_ui', True)
         except Exception:
             pass
         self._apply_theme(self.active_theme)
@@ -112,10 +114,26 @@ class BjornMenu:
         return themes
 
     def _apply_theme(self, theme_name):
-        """Load menu_title and title_font from the given theme."""
+        """Load menu_title, title_font, mood labels, colors, and bg images from the given theme."""
         self.active_theme = theme_name
         self.menu_title = "Pager Bjorn"
+        self.show_menu_title = True
+        self.show_settings_title = True
         self.title_font = FONT_VIKING
+        self.menu_font = FONT_DEJAVU
+        self.theme_moods = {}
+
+        # Default menu colors
+        self.menu_bg_color = Pager.BLACK
+        self.menu_title_color = TITLE_COLOR
+        self.menu_selected_color = SELECTED_COLOR
+        self.menu_unselected_color = UNSELECTED_COLOR
+        self.menu_on_color = ON_COLOR
+        self.menu_off_color = OFF_COLOR
+        self.menu_dim_color = DIM_COLOR
+        self.menu_warning_color = WARNING_COLOR
+        self.menu_submenu_color = SUBMENU_COLOR
+
         theme_dir = os.path.join(self.themes_dir, theme_name)
         theme_json = os.path.join(theme_dir, 'theme.json')
         if os.path.isfile(theme_json):
@@ -123,11 +141,48 @@ class BjornMenu:
                 with open(theme_json, 'r') as f:
                     theme_data = json.load(f)
                 self.menu_title = theme_data.get('menu_title', self.menu_title)
+                self.show_menu_title = theme_data.get('show_menu_title', True)
+                self.show_settings_title = theme_data.get('show_settings_title', True)
+                self.theme_moods = theme_data.get('moods', {})
+
+                # Themeable menu colors
+                mc = theme_data.get('menu_colors', {})
+                if mc:
+                    def _c(key, default):
+                        v = mc.get(key)
+                        return Pager.rgb(v[0], v[1], v[2]) if v else default
+                    self.menu_bg_color = _c('bg', self.menu_bg_color)
+                    self.menu_title_color = _c('title', self.menu_title_color)
+                    self.menu_selected_color = _c('selected', self.menu_selected_color)
+                    self.menu_unselected_color = _c('unselected', self.menu_unselected_color)
+                    self.menu_on_color = _c('on', self.menu_on_color)
+                    self.menu_off_color = _c('off', self.menu_off_color)
+                    self.menu_dim_color = _c('dim', self.menu_dim_color)
+                    self.menu_warning_color = _c('warning', self.menu_warning_color)
+                    self.menu_submenu_color = _c('submenu', self.menu_submenu_color)
             except Exception:
                 pass
         theme_font = os.path.join(theme_dir, 'fonts', 'title.TTF')
         if os.path.isfile(theme_font):
             self.title_font = theme_font
+
+        # Menu body font (optional) — check menu.ttf / menu.TTF / menu.otf
+        for fname in ('menu.ttf', 'menu.TTF', 'menu.otf'):
+            mf = os.path.join(theme_dir, 'fonts', fname)
+            if os.path.isfile(mf):
+                self.menu_font = mf
+                break
+
+        # Menu background images (optional)
+        images_dir = os.path.join(theme_dir, 'images')
+        self.menu_bg = None
+        self.settings_bg = None
+        for name, attr in [('menu_bg', 'menu_bg'), ('settings_bg', 'settings_bg')]:
+            for ext in ('.png', '.bmp'):
+                path = os.path.join(images_dir, name + ext)
+                if os.path.isfile(path):
+                    setattr(self, attr, path)
+                    break
 
     def _save_theme(self, theme_name):
         """Save the selected theme to shared_config.json."""
@@ -150,6 +205,32 @@ class BjornMenu:
                 json.dump(cfg, f, indent=4)
         except Exception:
             pass
+
+    def _save_web_ui(self, enabled):
+        """Save the web_ui setting to shared_config.json."""
+        self.web_ui = enabled
+        try:
+            with open(self.config_path, 'r') as f:
+                cfg = json.load(f)
+            cfg['web_ui'] = enabled
+            with open(self.config_path, 'w') as f:
+                json.dump(cfg, f, indent=4)
+        except Exception:
+            pass
+
+    MOOD_PRESETS = [
+        ('target', {'brute_force_running': True,  'scan_vuln_running': True,  'file_steal_running': True,  'attack_order': 'per_host'}),
+        ('swarm',  {'brute_force_running': True,  'scan_vuln_running': True,  'file_steal_running': True,  'attack_order': 'spread'}),
+        ('recon',  {'brute_force_running': False, 'scan_vuln_running': False, 'file_steal_running': False, 'attack_order': 'spread'}),
+    ]
+
+    _MOOD_DEFAULTS = {'target': 'Target', 'swarm': 'Swarm', 'recon': 'Recon'}
+    _ORDER_LABELS = ['Spread', 'Per Host', 'Per Phase']
+    _ORDER_VALUES = ['spread', 'per_host', 'per_phase']
+
+    def _mood_label(self, preset_key):
+        """Get mood display label from theme, falling back to defaults."""
+        return self.theme_moods.get(preset_key, self._MOOD_DEFAULTS[preset_key])
 
     def _wait_button(self):
         """Wait for a button press using thread-safe event queue."""
@@ -174,16 +255,20 @@ class BjornMenu:
             else:
                 time.sleep(0.016)
 
-    def _draw_main_menu(self, selected, iface_idx, web_ui, theme_idx, display_landscape=True):
+    def _draw_main_menu(self, selected, iface_idx, theme_idx):
         """Draw the main menu screen."""
-        self.gfx.clear(Pager.BLACK)
+        if self.menu_bg:
+            self.gfx.draw_image_file_scaled(0, 0, 480, 222, self.menu_bg)
+        else:
+            self.gfx.clear(self.menu_bg_color)
 
-        # Title using active theme font
-        self.gfx.draw_ttf_centered(8, self.menu_title, TITLE_COLOR, self.title_font, 40.0)
+        # Title using active theme font (can be hidden when baked into bg image)
+        if self.show_menu_title:
+            self.gfx.draw_ttf_centered(8, self.menu_title, self.menu_title_color, self.title_font, 40.0)
 
         # Menu items
         y = 55
-        items = self._get_menu_items(iface_idx, web_ui, theme_idx, display_landscape)
+        items = self._get_menu_items(iface_idx, theme_idx)
 
         for i, item in enumerate(items):
             is_selected = (i == selected)
@@ -193,74 +278,68 @@ class BjornMenu:
                 label = item['label']
                 value = item['value']
                 value_color = item['value_color']
-                label_color = SELECTED_COLOR if is_selected else UNSELECTED_COLOR
+                label_color = self.menu_selected_color if is_selected else self.menu_unselected_color
 
                 # Calculate fixed positions using max value width for alignment
                 max_value = item.get('max_value', value)
-                label_width = self.gfx.ttf_width(label, FONT_DEJAVU, TTF_MEDIUM)
-                max_value_width = self.gfx.ttf_width(max_value, FONT_DEJAVU, TTF_MEDIUM)
+                label_width = self.gfx.ttf_width(label, self.menu_font, TTF_MEDIUM)
+                max_value_width = self.gfx.ttf_width(max_value, self.menu_font, TTF_MEDIUM)
                 total_width = label_width + 8 + max_value_width
                 start_x = (480 - total_width) // 2
-                self.gfx.draw_ttf(start_x, y, label, label_color, FONT_DEJAVU, TTF_MEDIUM)
-                self.gfx.draw_ttf(start_x + label_width + 8, y, value, value_color, FONT_DEJAVU, TTF_MEDIUM)
+                self.gfx.draw_ttf(start_x, y, label, label_color, self.menu_font, TTF_MEDIUM)
+                self.gfx.draw_ttf(start_x + label_width + 8, y, value, value_color, self.menu_font, TTF_MEDIUM)
             else:
                 # Simple menu item
-                color = SELECTED_COLOR if is_selected else UNSELECTED_COLOR
-                self.gfx.draw_ttf_centered(y, item['label'], color, FONT_DEJAVU, TTF_MEDIUM)
+                color = self.menu_selected_color if is_selected else self.menu_unselected_color
+                self.gfx.draw_ttf_centered(y, item['label'], color, self.menu_font, TTF_MEDIUM)
 
             y += 22
 
         self.gfx.flip()
 
-    def _get_menu_items(self, iface_idx, web_ui, theme_idx, display_landscape=True):
+    def _get_menu_items(self, iface_idx, theme_idx):
         """Build the list of menu items for drawing."""
-        items = [{'label': 'Start Bjorn'}]
+        items = [{'label': 'Start'}]
 
-        # Interface selector — show IP with configured scan prefix, not raw interface CIDR
+        # Network selector — show IP/prefix only, stable label position
         if self.interfaces:
             iface = self.interfaces[iface_idx]
-            iface_text = f"{iface['name']} ({iface['ip']}/{self.scan_prefix})"
+            net_text = f"{iface['ip']}/{self.scan_prefix}"
+            max_net = max((f"{i['ip']}/{self.scan_prefix}" for i in self.interfaces), key=len)
         else:
-            iface_text = "none"
+            net_text = "none"
+            max_net = "none"
 
         items.append({
             'toggle': True,
-            'label': 'Interface:',
-            'value': iface_text,
-            'value_color': UNSELECTED_COLOR,
-            'max_value': iface_text,  # Dynamic width
-        })
-
-        items.append({
-            'toggle': True,
-            'label': 'Web UI:',
-            'value': 'ON :8000' if web_ui else 'OFF',
-            'value_color': ON_COLOR if web_ui else OFF_COLOR,
-            'max_value': 'ON :8000',
+            'label': 'Network:',
+            'value': net_text,
+            'value_color': self.menu_unselected_color,
+            'max_value': max_net,
         })
 
         # Theme selector
         theme_name = self.available_themes[theme_idx] if self.available_themes else 'bjorn'
-        # Find longest theme name for stable alignment
         max_theme = max(self.available_themes, key=len) if self.available_themes else theme_name
         items.append({
             'toggle': True,
             'label': 'Theme:',
             'value': theme_name,
-            'value_color': TITLE_COLOR,
+            'value_color': self.menu_title_color,
             'max_value': max_theme,
         })
 
-        # Display orientation selector
+        # Display orientation
         items.append({
             'toggle': True,
             'label': 'Display:',
-            'value': 'Landscape' if display_landscape else 'Portrait',
-            'value_color': ON_COLOR if display_landscape else OFF_COLOR,
+            'value': 'Landscape' if self.display_landscape else 'Portrait',
+            'value_color': self.menu_on_color if self.display_landscape else self.menu_off_color,
             'max_value': 'Landscape',
         })
 
         items.append({'label': 'Clear Data'})
+        items.append({'label': 'Settings'})
         items.append({'label': 'Exit'})
         return items
 
@@ -268,16 +347,14 @@ class BjornMenu:
         """Show the main menu. Returns config dict or None to exit."""
         selected = 0
         iface_idx = 0
-        web_ui = True
-        display_landscape = self.display_landscape
         # Find the index of the active theme
         theme_idx = 0
         if self.active_theme in self.available_themes:
             theme_idx = self.available_themes.index(self.active_theme)
-        num_options = 7  # Start Bjorn, Interface, Web UI, Theme, Display, Clear Data, Exit
+        num_options = 7  # Start, Network, Theme, Display, Clear Data, Settings, Exit
 
         def redraw():
-            self._draw_main_menu(selected, iface_idx, web_ui, theme_idx, display_landscape)
+            self._draw_main_menu(selected, iface_idx, theme_idx)
 
         redraw()
 
@@ -292,17 +369,13 @@ class BjornMenu:
                 redraw()
             elif btn in ['LEFT', 'RIGHT']:
                 if selected == 1 and self.interfaces:
-                    # Cycle interface
+                    # Cycle network interface
                     if btn == 'RIGHT':
                         iface_idx = (iface_idx + 1) % len(self.interfaces)
                     else:
                         iface_idx = (iface_idx - 1) % len(self.interfaces)
                     redraw()
-                elif selected == 2:
-                    # Toggle web UI
-                    web_ui = not web_ui
-                    redraw()
-                elif selected == 3 and self.available_themes:
+                elif selected == 2 and self.available_themes:
                     # Cycle theme
                     if btn == 'RIGHT':
                         theme_idx = (theme_idx + 1) % len(self.available_themes)
@@ -311,10 +384,10 @@ class BjornMenu:
                     self._apply_theme(self.available_themes[theme_idx])
                     self._save_theme(self.available_themes[theme_idx])
                     redraw()
-                elif selected == 4:
+                elif selected == 3:
                     # Toggle display orientation
-                    display_landscape = not display_landscape
-                    self._save_rotation(display_landscape)
+                    self.display_landscape = not self.display_landscape
+                    self._save_rotation(self.display_landscape)
                     redraw()
             elif btn == 'SELECT':
                 if selected == 0:
@@ -328,29 +401,30 @@ class BjornMenu:
                     return {
                         'interface': iface['name'],
                         'ip': iface['ip'],
-                        'web_ui': web_ui,
+                        'web_ui': self.web_ui,
                     }
                 elif selected == 1 and self.interfaces:
-                    # Cycle interface forward on select
+                    # Cycle network forward on select
                     iface_idx = (iface_idx + 1) % len(self.interfaces)
                     redraw()
-                elif selected == 2:
-                    web_ui = not web_ui
-                    redraw()
-                elif selected == 3 and self.available_themes:
+                elif selected == 2 and self.available_themes:
                     # Cycle theme forward on select
                     theme_idx = (theme_idx + 1) % len(self.available_themes)
                     self._apply_theme(self.available_themes[theme_idx])
                     self._save_theme(self.available_themes[theme_idx])
                     redraw()
-                elif selected == 4:
+                elif selected == 3:
                     # Toggle display orientation on select
-                    display_landscape = not display_landscape
-                    self._save_rotation(display_landscape)
+                    self.display_landscape = not self.display_landscape
+                    self._save_rotation(self.display_landscape)
                     redraw()
-                elif selected == 5:
+                elif selected == 4:
                     # Clear Data submenu
                     self._show_clear_data_menu()
+                    redraw()
+                elif selected == 5:
+                    # Settings submenu
+                    self._show_settings_menu()
                     redraw()
                 elif selected == 6:
                     # Exit
@@ -358,11 +432,182 @@ class BjornMenu:
 
     def _show_message(self, text, color, subtext=None, subcolor=None):
         """Show a centered message on screen."""
-        self.gfx.clear(Pager.BLACK)
-        self.gfx.draw_ttf_centered(80, text, color, FONT_DEJAVU, TTF_LARGE)
+        self.gfx.clear(self.menu_bg_color)
+        self.gfx.draw_ttf_centered(80, text, color, self.menu_font, TTF_LARGE)
         if subtext and subcolor:
-            self.gfx.draw_ttf_centered(115, subtext, subcolor, FONT_DEJAVU, TTF_SMALL)
+            self.gfx.draw_ttf_centered(115, subtext, subcolor, self.menu_font, TTF_SMALL)
         self.gfx.flip()
+
+    def _show_settings_menu(self):
+        """Show the Settings submenu with attack presets, toggles, and orientation."""
+        # Read current config
+        try:
+            with open(self.config_path, 'r') as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+
+        # Current values
+        web_ui_idx = 1 if self.web_ui else 0
+        manual_val = cfg.get('manual_mode', False)
+        bf_val = cfg.get('brute_force_running', True)
+        vs_val = cfg.get('scan_vuln_running', True)
+        fs_val = cfg.get('file_steal_running', True)
+        order_val = cfg.get('attack_order', 'spread')
+        order_idx = self._ORDER_VALUES.index(order_val) if order_val in self._ORDER_VALUES else 0
+
+        # Mood labels from active theme
+        mood_labels = [self._mood_label(k) for k, _ in self.MOOD_PRESETS]
+        mood_idx = 0
+
+        items = [
+            ('web_ui',       'Web UI',       ['OFF', 'ON'],                     web_ui_idx),
+            ('manual_mode',  'Manual Mode',  ['OFF', 'ON'],                     int(manual_val)),
+            ('mood',         'Mood',         mood_labels,                       mood_idx),
+            ('brute_force',  'Brute Force',  ['OFF', 'ON'],                     int(bf_val)),
+            ('vuln_scan',    'Vuln Scan',    ['OFF', 'ON'],                     int(vs_val)),
+            ('file_steal',   'File Steal',   ['OFF', 'ON'],                     int(fs_val)),
+            ('attack_order', 'Attack Order', self._ORDER_LABELS,                order_idx),
+        ]
+
+        selected = 0
+        num_items = len(items)
+        _ATTACK_KEYS = {'mood', 'brute_force', 'vuln_scan', 'file_steal', 'attack_order'}
+
+        def is_manual():
+            for key, _l, _c, idx in items:
+                if key == 'manual_mode':
+                    return bool(idx)
+            return False
+
+        def apply_mood(m_idx):
+            _key, preset = self.MOOD_PRESETS[m_idx]
+            for i, (key, label, choices, _idx) in enumerate(items):
+                if key == 'mood':
+                    items[i] = (key, label, choices, m_idx)
+                elif key == 'brute_force':
+                    items[i] = (key, label, choices, int(preset['brute_force_running']))
+                elif key == 'vuln_scan':
+                    items[i] = (key, label, choices, int(preset['scan_vuln_running']))
+                elif key == 'file_steal':
+                    items[i] = (key, label, choices, int(preset['file_steal_running']))
+                elif key == 'attack_order':
+                    ov = preset['attack_order']
+                    items[i] = (key, label, choices, self._ORDER_VALUES.index(ov))
+
+        def save_settings():
+            try:
+                with open(self.config_path, 'r') as f:
+                    c = json.load(f)
+            except Exception:
+                c = {}
+            for key, _label, choices, idx in items:
+                if key == 'web_ui':
+                    self.web_ui = bool(idx)
+                    c['web_ui'] = self.web_ui
+                elif key == 'manual_mode':
+                    c['manual_mode'] = bool(idx)
+                elif key == 'mood':
+                    continue
+                elif key == 'brute_force':
+                    c['brute_force_running'] = bool(idx)
+                elif key == 'vuln_scan':
+                    c['scan_vuln_running'] = bool(idx)
+                elif key == 'file_steal':
+                    c['file_steal_running'] = bool(idx)
+                elif key == 'attack_order':
+                    c['attack_order'] = self._ORDER_VALUES[idx]
+            try:
+                with open(self.config_path, 'w') as f:
+                    json.dump(c, f, indent=4)
+            except Exception:
+                pass
+
+        def draw_menu():
+            if self.settings_bg:
+                self.gfx.draw_image_file_scaled(0, 0, 480, 222, self.settings_bg)
+            else:
+                self.gfx.clear(self.menu_bg_color)
+            if self.show_settings_title:
+                self.gfx.draw_ttf_centered(8, "SETTINGS", self.menu_submenu_color, self.menu_font, TTF_LARGE)
+
+            manual = is_manual()
+            y = 42
+            for i, (key, label, choices, idx) in enumerate(items):
+                is_sel = (i == selected)
+                disabled = manual and key in _ATTACK_KEYS
+
+                if disabled:
+                    value = 'N/A'
+                    label_color = self.menu_dim_color
+                    val_color = self.menu_dim_color
+                else:
+                    value = choices[idx]
+                    label_color = self.menu_selected_color if is_sel else self.menu_unselected_color
+                    if key in ('web_ui', 'manual_mode', 'brute_force', 'vuln_scan', 'file_steal'):
+                        val_color = self.menu_on_color if idx else self.menu_off_color
+                    elif key == 'mood':
+                        val_color = self.menu_title_color
+                    else:
+                        val_color = self.menu_unselected_color
+
+                # Draw label: value with stable alignment
+                label_text = f"{label}:"
+                label_width = self.gfx.ttf_width(label_text, self.menu_font, TTF_MEDIUM)
+                # Use actual choices for width calc even when showing N/A
+                max_val_w = max(self.gfx.ttf_width(c, self.menu_font, TTF_MEDIUM) for c in choices)
+                na_w = self.gfx.ttf_width('N/A', self.menu_font, TTF_MEDIUM)
+                if na_w > max_val_w:
+                    max_val_w = na_w
+                total_width = label_width + 8 + max_val_w
+                start_x = (480 - total_width) // 2
+
+                self.gfx.draw_ttf(start_x, y, label_text, label_color, self.menu_font, TTF_MEDIUM)
+
+                # Right-align value within max_val_w area
+                val_w = self.gfx.ttf_width(value, self.menu_font, TTF_MEDIUM)
+                val_x = start_x + label_width + 8 + (max_val_w - val_w)
+                self.gfx.draw_ttf(val_x, y, value, val_color, self.menu_font, TTF_MEDIUM)
+
+                y += 24
+
+            self.gfx.flip()
+
+        draw_menu()
+
+        while True:
+            btn = self._wait_button()
+
+            if btn == 'UP':
+                selected = (selected - 1) % num_items
+                draw_menu()
+            elif btn == 'DOWN':
+                selected = (selected + 1) % num_items
+                draw_menu()
+            elif btn in ['LEFT', 'RIGHT']:
+                key, label, choices, idx = items[selected]
+                if is_manual() and key in _ATTACK_KEYS:
+                    continue
+                if btn == 'RIGHT':
+                    new_idx = (idx + 1) % len(choices)
+                else:
+                    new_idx = (idx - 1) % len(choices)
+                items[selected] = (key, label, choices, new_idx)
+                if key == 'mood':
+                    apply_mood(new_idx)
+                draw_menu()
+            elif btn == 'SELECT':
+                key, label, choices, idx = items[selected]
+                if is_manual() and key in _ATTACK_KEYS:
+                    continue
+                new_idx = (idx + 1) % len(choices)
+                items[selected] = (key, label, choices, new_idx)
+                if key == 'mood':
+                    apply_mood(new_idx)
+                draw_menu()
+            elif btn == 'BACK':
+                save_settings()
+                return
 
     def _show_clear_data_menu(self):
         """Show the Clear Data submenu."""
@@ -370,13 +615,13 @@ class BjornMenu:
         options = ['Clear Logs', 'Clear Credentials', 'Clear Stolen Data', 'Clear All', 'Back']
 
         while True:
-            self.gfx.clear(Pager.BLACK)
-            self.gfx.draw_ttf_centered(12, "CLEAR DATA", SUBMENU_COLOR, FONT_DEJAVU, TTF_LARGE)
+            self.gfx.clear(self.menu_bg_color)
+            self.gfx.draw_ttf_centered(12, "CLEAR DATA", self.menu_submenu_color, self.menu_font, TTF_LARGE)
 
             y = 55
             for i, opt in enumerate(options):
-                color = SELECTED_COLOR if i == selected else UNSELECTED_COLOR
-                self.gfx.draw_ttf_centered(y, opt, color, FONT_DEJAVU, TTF_MEDIUM)
+                color = self.menu_selected_color if i == selected else self.menu_unselected_color
+                self.gfx.draw_ttf_centered(y, opt, color, self.menu_font, TTF_MEDIUM)
                 y += 30
 
             self.gfx.flip()
@@ -409,14 +654,14 @@ class BjornMenu:
         selected = 1  # Default to NO
 
         while True:
-            self.gfx.clear(Pager.BLACK)
-            self.gfx.draw_ttf_centered(60, prompt, WARNING_COLOR, FONT_DEJAVU, TTF_LARGE)
+            self.gfx.clear(self.menu_bg_color)
+            self.gfx.draw_ttf_centered(60, prompt, self.menu_warning_color, self.menu_font, TTF_LARGE)
 
             center = 480 // 2
-            yes_color = SELECTED_COLOR if selected == 0 else UNSELECTED_COLOR
-            no_color = SELECTED_COLOR if selected == 1 else UNSELECTED_COLOR
-            self.gfx.draw_ttf(center - 85, 115, "YES", yes_color, FONT_DEJAVU, TTF_MEDIUM)
-            self.gfx.draw_ttf(center + 45, 115, "NO", no_color, FONT_DEJAVU, TTF_MEDIUM)
+            yes_color = self.menu_selected_color if selected == 0 else self.menu_unselected_color
+            no_color = self.menu_selected_color if selected == 1 else self.menu_unselected_color
+            self.gfx.draw_ttf(center - 85, 115, "YES", yes_color, self.menu_font, TTF_MEDIUM)
+            self.gfx.draw_ttf(center + 45, 115, "NO", no_color, self.menu_font, TTF_MEDIUM)
             self.gfx.flip()
 
             btn = self._wait_button()

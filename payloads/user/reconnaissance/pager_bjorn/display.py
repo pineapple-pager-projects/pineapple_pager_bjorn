@@ -210,6 +210,7 @@ class Display:
         # Fonts
         self.font_arial = self.shared_data.font_arial_path
         self.font_viking = self.shared_data.font_viking_path
+        self.font_menu = getattr(self.shared_data, 'font_menu_path', self.font_arial)
 
         # Current animation frame
         self.main_image_path = None
@@ -384,6 +385,27 @@ class Display:
                 time.sleep(1.0)
 
     # ------------------------------------------------------------------
+    # Pause menu helpers
+    # ------------------------------------------------------------------
+
+    def _fit_font_size(self, text, font_path, max_w, max_h, pad=2):
+        """Find the largest font size that fits text within max_w x max_h (with padding).
+        Uses width constraint and font_size <= max_h - pad*2 (ignoring descender bloat)."""
+        target_w = max_w - pad * 2
+        target_h = max_h - pad * 2
+        lo, hi = 8, target_h
+        best = lo
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            tw = self.pager.ttf_width(text, font_path, mid)
+            if tw <= target_w and mid <= target_h:
+                best = mid
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        return best
+
+    # ------------------------------------------------------------------
     # Pause menu (dispatch)
     # ------------------------------------------------------------------
 
@@ -407,13 +429,28 @@ class Display:
         if current_brightness < 0:
             current_brightness = self.screen_brightness
 
-        yellow_color = self.pager.rgb(180, 150, 0)
-        blue_color = self.pager.rgb(50, 100, 220)
-        red_color = self.pager.rgb(200, 0, 0)
+        # Resolve pause background image
+        pause_bg = None
+        theme_name = self.config.get('theme', 'bjorn')
+        theme_dir = os.path.join(PAYLOAD_DIR, 'themes', theme_name)
+        for ext in ('.png', '.bmp'):
+            path = os.path.join(theme_dir, 'images', 'pause_bg_portrait' + ext)
+            if os.path.isfile(path):
+                pause_bg = path
+                break
+
+        # Pause menu config — colors and font sizes from theme
+        pm = getattr(self.shared_data, 'theme_pause_menu_colors', {})
+        def _pc(key, default):
+            v = pm.get(key)
+            return self.pager.rgb(v[0], v[1], v[2]) if v else default
+        pause_bg_color = _pc('bg', self.BG_COLOR)
+        pause_text_color = _pc('text', self.TEXT_COLOR)
+        pause_accent_color = _pc('accent', self.ACCENT_COLOR)
 
         # Button options (index 0 in options = index 1 in selected)
         options = [
-            ("MAIN MENU", yellow_color, 99),
+            ("MAIN MENU", 99),
         ]
         launchers = discover_launchers()
         launcher_opt_idx = -1
@@ -422,65 +459,88 @@ class Display:
         if launchers:
             launcher_opt_idx = len(options)
             title, path = launchers[launcher_idx]
-            options.append((f"EXIT TO {title}", blue_color, (42, path)))
-        options.append(("EXIT BJORN", red_color, 0))
+            options.append((title.upper(), (42, path)))
+        options.append(("EXIT PAYLOAD", 0))
 
         # selected: 0 = brightness bar, 1..N = buttons (1-indexed into options)
         selected = 1
         num_items = 1 + len(options)
 
-        sy = self.height / 250.0
+        # Pre-compute auto-fitted font sizes for buttons
+        btn_w = 180
+        btn_h = 32
+        # Find the largest size that fits the widest label
+        all_labels = [label for label, _ in options] + ["BRIGHTNESS", "100%"]
+        widest_label = max(all_labels, key=len)
+        fs_btn = self._fit_font_size(widest_label, self.font_menu, btn_w, btn_h)
 
         def draw_menu():
-            self.pager.fill_rect(0, 0, self.width, self.height, self.BG_COLOR)
+            if pause_bg:
+                self.pager.draw_image_file_scaled(0, 0, self.width, self.height, pause_bg)
+            else:
+                self.pager.fill_rect(0, 0, self.width, self.height, pause_bg_color)
+
+            show_title = getattr(self.shared_data, 'theme_show_pause_title', True)
+
+            # Vertical offset: push content down when title is hidden (baked into bg)
+            y_off = 85 if not show_title else 0
 
             box_y = int(self.height * 0.10) - 3
             box_h = int(self.height * 0.80)
-            self.pager.fill_rect(10, box_y, self.width - 20, box_h, self.BG_COLOR)
+            if not pause_bg:
+                self.pager.fill_rect(10, box_y, self.width - 20, box_h, pause_bg_color)
 
-            title_y = box_y + 15
-            self.pager.draw_ttf_centered(title_y, "MENU", self.TEXT_COLOR, self.font_viking, int(12 * sy))
+            if show_title:
+                title_y = box_y + 15
+                title_fs = self._fit_font_size("MENU", self.font_viking, btn_w, 30)
+                self.pager.draw_ttf_centered(title_y, "MENU", pause_text_color, self.font_viking, title_fs)
 
-            bright_y = box_y + int(30 * sy)
-            bright_color = self.TEXT_COLOR if selected == 0 else self.ACCENT_COLOR
-            self.pager.draw_ttf_centered(bright_y, "BRIGHTNESS", bright_color, self.font_arial, int(9 * sy))
+            bright_color = pause_text_color if selected == 0 else pause_accent_color
 
-            bar_y = bright_y + int(22 * sy)
-            bar_x = 30
-            bar_w = self.width - 60
-            bar_h = int(12 * sy)
-            if selected == 0:
-                self.pager.rect(bar_x - 3, bar_y - 3, bar_w + 6, bar_h + 6, self.TEXT_COLOR)
-            self.pager.fill_rect(bar_x, bar_y, bar_w, bar_h, self.ACCENT_COLOR)
-            fill_w = int(bar_w * current_brightness / 100)
-            self.pager.fill_rect(bar_x, bar_y, fill_w, bar_h, self.TEXT_COLOR)
-            self.pager.rect(bar_x, bar_y, bar_w, bar_h, self.TEXT_COLOR)
-
-            pct_y = bar_y + bar_h + 5
-            self.pager.draw_ttf_centered(pct_y, f"{current_brightness}%", self.TEXT_COLOR, self.font_arial, int(10 * sy))
-
-            btn_w = 120
-            btn_h = 28
             btn_x = (self.width - btn_w) // 2
-            btn_gap = 8
-            font_size = int(8 * sy)
-            first_btn_y = pct_y + int(18 * sy)
 
-            for i, (label, color, _action) in enumerate(options):
+            bar_y = y_off + box_y + 60
+            bar_x = btn_x
+            bar_w = btn_w
+            bar_h = 18
+
+            # BRIGHTNESS label tight above bar — same font size as buttons
+            bright_y = bar_y - fs_btn - 4
+            self.pager.draw_ttf_centered(bright_y, "BRIGHTNESS", bright_color, self.font_menu, fs_btn)
+
+            if selected == 0:
+                self.pager.rect(bar_x - 3, bar_y - 3, bar_w + 6, bar_h + 6, pause_text_color)
+            self.pager.fill_rect(bar_x, bar_y, bar_w, bar_h, pause_accent_color)
+            fill_w = int(bar_w * current_brightness / 100)
+            self.pager.fill_rect(bar_x, bar_y, fill_w, bar_h, pause_text_color)
+            self.pager.rect(bar_x, bar_y, bar_w, bar_h, pause_text_color)
+
+            pct_y = bar_y + bar_h + 4
+            fs_pct = max(8, fs_btn - 4)
+            self.pager.draw_ttf_centered(pct_y, f"{current_brightness}%", pause_text_color, self.font_menu, fs_pct)
+
+            btn_gap = 10
+            first_btn_y = pct_y + fs_pct + 5
+
+            # Get actual rendered height for vertical centering
+            text_h = self.pager.ttf_height(self.font_menu, fs_btn)
+
+            for i, (label, _action) in enumerate(options):
                 btn_y = first_btn_y + i * (btn_h + btn_gap)
-                if i + 1 == selected:
-                    self.pager.fill_rect(btn_x - 4, btn_y - 4, btn_w + 8, btn_h + 8, self.TEXT_COLOR)
-                self.pager.fill_rect(btn_x, btn_y, btn_w, btn_h, color)
-                text_w = self.pager.ttf_width(label, self.font_arial, font_size)
+                is_sel = (i + 1 == selected)
+                btn_color = pause_text_color if is_sel else pause_accent_color
+                txt_color = pause_bg_color if is_sel else pause_text_color
+                self.pager.fill_rect(btn_x, btn_y, btn_w, btn_h, btn_color)
+                text_w = self.pager.ttf_width(label, self.font_menu, fs_btn)
                 text_x = btn_x + (btn_w - text_w) // 2
-                text_y = btn_y + (btn_h - font_size) // 2
-                self.pager.draw_ttf(text_x, text_y, label, self.BG_COLOR, self.font_arial, font_size)
+                text_y = btn_y + (btn_h - text_h) // 2
+                self.pager.draw_ttf(text_x, text_y, label, txt_color, self.font_menu, fs_btn)
 
                 # Arrow indicators for launcher toggle when multiple launchers exist
                 if i == launcher_opt_idx and multi_launch:
-                    arrow_fs = int(7 * sy)
-                    self.pager.draw_ttf(btn_x - 14, text_y, "<", self.TEXT_COLOR, self.font_arial, arrow_fs)
-                    self.pager.draw_ttf(btn_x + btn_w + 4, text_y, ">", self.TEXT_COLOR, self.font_arial, arrow_fs)
+                    arrow_fs = max(8, fs_btn - 4)
+                    self.pager.draw_ttf(btn_x - 14, text_y, "<", pause_text_color, self.font_menu, arrow_fs)
+                    self.pager.draw_ttf(btn_x + btn_w + 4, text_y, ">", pause_text_color, self.font_menu, arrow_fs)
 
             self.pager.flip()
 
@@ -499,7 +559,7 @@ class Display:
                 elif selected - 1 == launcher_opt_idx and multi_launch:
                     launcher_idx = (launcher_idx - 1) % len(launchers)
                     title, path = launchers[launcher_idx]
-                    options[launcher_opt_idx] = (f"EXIT TO {title}", blue_color, (42, path))
+                    options[launcher_opt_idx] = (title.upper(), (42, path))
                     draw_menu()
             elif button & self.pager.BTN_UP:
                 # Physical UP = adjust selected item right/increase
@@ -511,7 +571,7 @@ class Display:
                 elif selected - 1 == launcher_opt_idx and multi_launch:
                     launcher_idx = (launcher_idx + 1) % len(launchers)
                     title, path = launchers[launcher_idx]
-                    options[launcher_opt_idx] = (f"EXIT TO {title}", blue_color, (42, path))
+                    options[launcher_opt_idx] = (title.upper(), (42, path))
                     draw_menu()
             elif button & self.pager.BTN_LEFT:
                 # Physical LEFT = navigate up
@@ -524,8 +584,8 @@ class Display:
             elif button & self.pager.BTN_A:
                 if selected == 0:
                     continue  # Brightness has no select action
+                action = options[selected - 1][1]
                 self.dialog_showing = False
-                action = options[selected - 1][2]
                 if isinstance(action, tuple):
                     self._handoff_launcher_path = action[1]
                     return 42
@@ -547,13 +607,28 @@ class Display:
         if current_brightness < 0:
             current_brightness = self.screen_brightness
 
-        yellow_color = self.pager.rgb(180, 150, 0)
-        blue_color = self.pager.rgb(50, 100, 220)
-        red_color = self.pager.rgb(200, 0, 0)
+        # Resolve pause background image
+        pause_bg = None
+        theme_name = self.config.get('theme', 'bjorn')
+        theme_dir = os.path.join(PAYLOAD_DIR, 'themes', theme_name)
+        for ext in ('.png', '.bmp'):
+            path = os.path.join(theme_dir, 'images', 'pause_bg' + ext)
+            if os.path.isfile(path):
+                pause_bg = path
+                break
+
+        # Pause menu config — colors and font sizes from theme
+        pm = getattr(self.shared_data, 'theme_pause_menu_colors', {})
+        def _pc(key, default):
+            v = pm.get(key)
+            return self.pager.rgb(v[0], v[1], v[2]) if v else default
+        pause_bg_color = _pc('bg', self.BG_COLOR)
+        pause_text_color = _pc('text', self.TEXT_COLOR)
+        pause_accent_color = _pc('accent', self.ACCENT_COLOR)
 
         # Button options (index 0 in options = index 1 in selected)
         options = [
-            ("MAIN MENU", yellow_color, 99),
+            ("MAIN MENU", 99),
         ]
         launchers = discover_launchers()
         launcher_opt_idx = -1
@@ -562,71 +637,86 @@ class Display:
         if launchers:
             launcher_opt_idx = len(options)
             title, path = launchers[launcher_idx]
-            options.append((f"EXIT TO {title}", blue_color, (42, path)))
-        options.append(("EXIT BJORN", red_color, 0))
+            options.append((title.upper(), (42, path)))
+        options.append(("EXIT PAYLOAD", 0))
 
         # selected: 0 = brightness bar, 1..N = buttons (1-indexed into options)
         selected = 1
         num_items = 1 + len(options)
 
+        # Pre-compute auto-fitted font size — fits widest label including BRIGHTNESS
+        btn_w = 200
+        btn_h = 30
+        all_labels = [label for label, _ in options] + ["BRIGHTNESS", "100%"]
+        widest_label = max(all_labels, key=len)
+        fs_btn = self._fit_font_size(widest_label, self.font_menu, btn_w, btn_h)
+
         def draw_menu():
-            self.pager.fill_rect(0, 0, self.width, self.height, self.BG_COLOR)
+            if pause_bg:
+                self.pager.draw_image_file_scaled(0, 0, self.width, self.height, pause_bg)
+            else:
+                self.pager.fill_rect(0, 0, self.width, self.height, pause_bg_color)
+
+            show_title = getattr(self.shared_data, 'theme_show_pause_title', True)
 
             # Dialog box
             box_x, box_y = 10, 10
             box_w, box_h = self.width - 20, self.height - 20
-            self.pager.fill_rect(box_x, box_y, box_w, box_h, self.BG_COLOR)
+            if not pause_bg:
+                self.pager.fill_rect(box_x, box_y, box_w, box_h, pause_bg_color)
 
             # Title
-            title_fs = 26
-            title_w = self.pager.ttf_width("MENU", self.font_viking, title_fs)
-            self.pager.draw_ttf((self.width - title_w) // 2, 13, "MENU", self.TEXT_COLOR, self.font_viking, title_fs)
+            if show_title:
+                title_fs = self._fit_font_size("MENU", self.font_viking, btn_w, 30)
+                title_w = self.pager.ttf_width("MENU", self.font_viking, title_fs)
+                self.pager.draw_ttf((self.width - title_w) // 2, 17, "MENU", pause_text_color, self.font_viking, title_fs)
 
             # Brightness section
-            lbl_fs = 16
-            bright_color = self.TEXT_COLOR if selected == 0 else self.ACCENT_COLOR
-            lbl_w = self.pager.ttf_width("BRIGHTNESS", self.font_arial, lbl_fs)
-            self.pager.draw_ttf((self.width - lbl_w) // 2, 43, "BRIGHTNESS", bright_color, self.font_arial, lbl_fs)
+            bright_color = pause_text_color if selected == 0 else pause_accent_color
 
-            bar_y = 63
-            bar_x = 40
-            bar_w = self.width - 80
+            btn_x = (self.width - btn_w) // 2
+
+            bar_y = 67
+            bar_x = btn_x
+            bar_w = btn_w
             bar_h = 16
+
+            # BRIGHTNESS label tight above bar
+            lbl_w = self.pager.ttf_width("BRIGHTNESS", self.font_menu, fs_btn)
+            self.pager.draw_ttf((self.width - lbl_w) // 2, bar_y - fs_btn - 2, "BRIGHTNESS", bright_color, self.font_menu, fs_btn)
             if selected == 0:
-                self.pager.rect(bar_x - 3, bar_y - 3, bar_w + 6, bar_h + 6, self.TEXT_COLOR)
-            self.pager.fill_rect(bar_x, bar_y, bar_w, bar_h, self.ACCENT_COLOR)
+                self.pager.rect(bar_x - 3, bar_y - 3, bar_w + 6, bar_h + 6, pause_text_color)
+            self.pager.fill_rect(bar_x, bar_y, bar_w, bar_h, pause_accent_color)
             fill_w = int(bar_w * current_brightness / 100)
-            self.pager.fill_rect(bar_x, bar_y, fill_w, bar_h, self.TEXT_COLOR)
-            self.pager.rect(bar_x, bar_y, bar_w, bar_h, self.TEXT_COLOR)
+            self.pager.fill_rect(bar_x, bar_y, fill_w, bar_h, pause_text_color)
+            self.pager.rect(bar_x, bar_y, bar_w, bar_h, pause_text_color)
 
             pct_text = f"{current_brightness}%"
-            pct_fs = 16
-            pct_w = self.pager.ttf_width(pct_text, self.font_arial, pct_fs)
-            self.pager.draw_ttf((self.width - pct_w) // 2, 83, pct_text, self.TEXT_COLOR, self.font_arial, pct_fs)
+            fs_pct = max(8, fs_btn - 4)
+            pct_w = self.pager.ttf_width(pct_text, self.font_menu, fs_pct)
+            self.pager.draw_ttf((self.width - pct_w) // 2, 87, pct_text, pause_text_color, self.font_menu, fs_pct)
 
             # Menu buttons - vertical stack
-            btn_w = 200
-            btn_h = 32
-            btn_x = (self.width - btn_w) // 2
             btn_gap = 8
-            font_size = 18
-            first_btn_y = 109
+            first_btn_y = 113
+            text_h = self.pager.ttf_height(self.font_menu, fs_btn)
 
-            for i, (label, color, _action) in enumerate(options):
+            for i, (label, _action) in enumerate(options):
                 btn_y = first_btn_y + i * (btn_h + btn_gap)
-                if i + 1 == selected:
-                    self.pager.fill_rect(btn_x - 3, btn_y - 3, btn_w + 6, btn_h + 6, self.TEXT_COLOR)
-                self.pager.fill_rect(btn_x, btn_y, btn_w, btn_h, color)
-                text_w = self.pager.ttf_width(label, self.font_arial, font_size)
+                is_sel = (i + 1 == selected)
+                btn_color = pause_text_color if is_sel else pause_accent_color
+                txt_color = pause_bg_color if is_sel else pause_text_color
+                self.pager.fill_rect(btn_x, btn_y, btn_w, btn_h, btn_color)
+                text_w = self.pager.ttf_width(label, self.font_menu, fs_btn)
                 text_x = btn_x + (btn_w - text_w) // 2
-                text_y = btn_y + (btn_h - font_size) // 2
-                self.pager.draw_ttf(text_x, text_y, label, self.BG_COLOR, self.font_arial, font_size)
+                text_y = btn_y + (btn_h - text_h) // 2
+                self.pager.draw_ttf(text_x, text_y, label, txt_color, self.font_menu, fs_btn)
 
                 # Arrow indicators for launcher toggle when multiple launchers exist
                 if i == launcher_opt_idx and multi_launch:
-                    arrow_fs = 14
-                    self.pager.draw_ttf(btn_x - 16, text_y, "<", self.TEXT_COLOR, self.font_arial, arrow_fs)
-                    self.pager.draw_ttf(btn_x + btn_w + 4, text_y, ">", self.TEXT_COLOR, self.font_arial, arrow_fs)
+                    arrow_fs = fs_btn - 4
+                    self.pager.draw_ttf(btn_x - 16, text_y, "<", pause_text_color, self.font_menu, arrow_fs)
+                    self.pager.draw_ttf(btn_x + btn_w + 4, text_y, ">", pause_text_color, self.font_menu, arrow_fs)
 
             self.pager.flip()
 
@@ -650,7 +740,7 @@ class Display:
                 elif selected - 1 == launcher_opt_idx and multi_launch:
                     launcher_idx = (launcher_idx - 1) % len(launchers)
                     title, path = launchers[launcher_idx]
-                    options[launcher_opt_idx] = (f"EXIT TO {title}", blue_color, (42, path))
+                    options[launcher_opt_idx] = (title.upper(), (42, path))
                     draw_menu()
             elif button & self.pager.BTN_RIGHT:
                 if selected == 0:
@@ -661,13 +751,13 @@ class Display:
                 elif selected - 1 == launcher_opt_idx and multi_launch:
                     launcher_idx = (launcher_idx + 1) % len(launchers)
                     title, path = launchers[launcher_idx]
-                    options[launcher_opt_idx] = (f"EXIT TO {title}", blue_color, (42, path))
+                    options[launcher_opt_idx] = (title.upper(), (42, path))
                     draw_menu()
             elif button & self.pager.BTN_A:
                 if selected == 0:
                     continue  # Brightness has no select action
+                action = options[selected - 1][1]
                 self.dialog_showing = False
-                action = options[selected - 1][2]
                 if isinstance(action, tuple):
                     self._handoff_launcher_path = action[1]
                     return 42
