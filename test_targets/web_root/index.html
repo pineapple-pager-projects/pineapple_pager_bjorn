@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><title>Bjorn Test Target</title></head>
+<body>
+<h1>Bjorn Test Web Server</h1>
+<p>This is a vulnerable test target for Bjorn reconnaissance testing.</p>
+
+<h2>Navigation</h2>
+<ul>
+    <li><a href="admin/">Admin Panel</a></li>
+    <li><a href="phpmyadmin/">phpMyAdmin</a></li>
+    <li><a href="backup/">Backup Directory</a></li>
+    <li><a href="cgi-bin/status.sh">Server Status (CGI)</a></li>
+    <li><a href="cgi-bin/test.sh">CGI Test</a></li>
+    <li><a href="cgi-bin/test-cgi">test-cgi</a></li>
+    <li><a href="cgi-bin/printenv">printenv</a></li>
+    <li><a href="cgi-bin/whois.cgi">WHOIS Lookup</a></li>
+    <li><a href="cgi-bin/finger.cgi">Finger</a></li>
+    <li><a href="cookies.php">Cookie Test</a></li>
+    <li><a href="server-status">Server Status</a></li>
+    <li><a href="server-info">Server Info</a></li>
+    <li><a href="robots.txt">robots.txt</a></li>
+    <li><a href="crossdomain.xml">crossdomain.xml</a></li>
+</ul>
+
+<h2>Search</h2>
+<form action="/search" method="GET">
+    <input type="text" name="q" placeholder="Search...">
+    <button type="submit">Search</button>
+</form>
+
+<h2>Login</h2>
+<form action="/login" method="POST">
+    <label>Username: <input type="text" name="username"></label><br>
+    <label>Password: <input type="password" name="password"></label><br>
+    <button type="submit">Login</button>
+</form>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# http-method-tamper: auth required for GET/POST, but other methods bypass it
+AuthType Basic
+AuthName "Admin Area"
+AuthUserFile /etc/apache2/.htpasswd
+<Limit GET POST>
+    Require valid-user
+</Limit>

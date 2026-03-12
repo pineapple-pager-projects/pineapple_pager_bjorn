@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Loki</title>
+    <link rel="icon" href="web/images/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="web/css/loki.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" sizes="192x192" href="web/images/icon-192x192.png">
+</head>
+<body>
+    <nav id="nav">
+        <a href="#dashboard" data-tab="dashboard" class="nav-item active">
+            <span class="nav-icon">&#9876;</span>
+            <span class="nav-label">Dashboard</span>
+        </a>
+<a href="#hosts" data-tab="hosts" class="nav-item">
+            <span class="nav-icon">&#9701;</span>
+            <span class="nav-label">Hosts</span>
+        </a>
+        <a href="#attacks" data-tab="attacks" class="nav-item">
+            <span class="nav-icon">&#9935;</span>
+            <span class="nav-label">Attacks</span>
+        </a>
+        <a href="#loot" data-tab="loot" class="nav-item">
+            <span class="nav-icon">&#9830;</span>
+            <span class="nav-label">Loot</span>
+        </a>
+        <a href="#config" data-tab="config" class="nav-item">
+            <span class="nav-icon">&#9881;</span>
+            <span class="nav-label">Config</span>
+        </a>
+        <a href="#terminal" data-tab="terminal" class="nav-item">
+            <span class="nav-icon">&gt;_</span>
+            <span class="nav-label">Terminal</span>
+        </a>
+        <a href="#display" data-tab="display" class="nav-item">
+            <span class="nav-icon">&#9638;</span>
+            <span class="nav-label" id="nav-label-display">Display</span>
+        </a>
+    </nav>
+
+    <div id="toast-container"></div>
+
+    <main id="content">
+        <section id="tab-dashboard" class="tab-panel"></section>
+        <section id="tab-hosts" class="tab-panel"></section>
+        <section id="tab-attacks" class="tab-panel"></section>
+        <section id="tab-loot" class="tab-panel"></section>
+        <section id="tab-config" class="tab-panel"></section>
+        <section id="tab-terminal" class="tab-panel"></section>
+        <section id="tab-display" class="tab-panel"></section>
+    </main>
+
+    <div id="confirm-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content card">
+            <p id="confirm-message"></p>
+            <div class="modal-actions">
+                <button id="confirm-yes" class="btn btn-gold">Confirm</button>
+                <button id="confirm-no" class="btn btn-muted">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="web/scripts/app.js"></script>
+    <script src="web/scripts/dashboard.js"></script>
+    <script src="web/scripts/network.js"></script>
+    <script src="web/scripts/attacks.js"></script>
+    <script src="web/scripts/loot.js"></script>
+    <script src="web/scripts/config.js"></script>
+    <script src="web/scripts/terminal.js"></script>
+    <script src="web/scripts/loki.js"></script>
+</body>
+</html>

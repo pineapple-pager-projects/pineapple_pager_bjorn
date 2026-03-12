@@ -1,0 +1,11 @@
+admin
+root
+user
+guest
+test
+ftp
+anonymous
+Administrator
+pi
+ubuntu
+kali

@@ -1,0 +1,56 @@
+{
+    "display_name": "ClownSec",
+    "menu_title": "ClownSec",
+    "show_menu_title": false,
+    "show_settings_title": false,
+    "show_pause_title": false,
+    "web_title": "ClownSec Clown",
+    "bg_color": [255, 255, 255],
+    "text_color": [0, 0, 0],
+    "accent_color": [128, 128, 128],
+    "title_font_color": [139, 0, 0],
+    "title_font_size": 30,
+    "title_y_offset": 0,
+    "animation_mode": "random",
+    "image_display_delaymin": 5,
+    "image_display_delaymax": 15,
+    "comment_delaymin": 8,
+    "comment_delaymax": 20,
+    "moods": {
+        "target": "Psychotic",
+        "swarm": "Silly",
+        "recon": "Mime Mode"
+    },
+    "menu_colors": {
+        "bg": [35, 20, 25],
+        "title": [220, 180, 60],
+        "selected": [240, 200, 80],
+        "unselected": [190, 160, 130],
+        "on": [200, 170, 60],
+        "off": [160, 60, 60],
+        "dim": [110, 85, 80],
+        "warning": [220, 100, 50],
+        "submenu": [220, 180, 60]
+    },
+    "pause_menu_colors": {
+        "bg": [35, 20, 25],
+        "text": [240, 200, 80],
+        "accent": [140, 100, 80]
+    },
+    "web": {
+        "bg_dark": "#1a0a1a",
+        "bg_surface": "#251525",
+        "bg_elevated": "#301e30",
+        "accent": "#ff3366",
+        "accent_bright": "#ff5588",
+        "accent_dim": "#cc1144",
+        "text_primary": "#e8dce8",
+        "text_secondary": "#9a8e9a",
+        "text_muted": "#6b566b",
+        "border": "#3a263a",
+        "border_light": "#4a364a",
+        "glow": "0 0 12px rgba(255, 51, 102, 0.25)",
+        "font_title": "'Creepster', 'Impact', sans-serif",
+        "nav_label_display": "Display"
+    }
+}

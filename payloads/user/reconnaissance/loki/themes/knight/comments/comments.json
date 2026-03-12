@@ -1,0 +1,190 @@
+{
+  "IDLE": [
+    "Zzzz… The watchtower grows quiet…",
+    "I grow weary in this digital keep…",
+    "No dragons to slay… no firewalls to breach…",
+    "My sword is sharp, but my code grows restless…",
+    "Life in the castle is harsh…",
+    "This siege is dull…",
+    "Well then, what quest awaits?",
+    "I stand by the battlements…",
+    "Pray tell, hast thou a mission for me?",
+    "Add more scrolls to my quest log!",
+    "I linger in the royal server hall…",
+    "I do fancy new quests in my ledger…",
+    "Awaiting my next royal decree…",
+    "Knowest thou any tavern jests?",
+    "The more quests thou bringest, the stronger my legend grows…",
+    "I await my next crusade…",
+    "Adventure rides upon the wind!",
+    "Awake, chosen one… nay… I merely await orders…",
+    "Why could the warhorse not stand? It was two tired!",
+    "I would tell thee a jest about UDP pigeons… but thou might not receive it.",
+    "Hark! Is there a new bounty upon the board?",
+    "’Tis hot in this armory… like a dragon’s server chamber…",
+    "Dark mode is best — torches attract bugs!",
+    "Hail!",
+    "Rise, knight! Time to breach the gates!",
+    "Ready for a new siege?",
+    "Waiting for thy command, my liege…",
+    "Standing by at the castle gates…",
+    "Bored… let us storm something!",
+    "Scanning the horizon for weak ramparts…",
+    "Shall we begin a new campaign?",
+    "Let us uncover forbidden scrolls…",
+    "Any castles in sight?",
+    "Ready to breach the fortress!",
+    "Idle… give me a quest!",
+    "Sharpening my blade… and my scripts…",
+    "Ready to dive into the arcane code?",
+    "A knight without a quest is but armor in the wind…",
+    "Insert quest here --> [ ]"
+  ],
+
+  "NetworkScanner": [
+    "Scanning the kingdom walls for open gates…",
+    "Searching for unguarded drawbridges…",
+    "Mapping the enemy fortress…",
+    "Initiating raven reconnaissance…",
+    "I spy an open gate… how careless…",
+    "Open gates are invitations, are they not?",
+    "A forgotten tower door? Curious…",
+    "Each open portcullis tells a tale…",
+    "Exploring the castle corridors…",
+    "Identifying weak battlements…",
+    "Gathering intelligence for the crown…",
+    "Almost done scouting the realm…",
+    "Any juicy castles to besiege?",
+    "Think of this as a royal treasure hunt…",
+    "Like a court detective, but with enchanted parchments…"
+  ],
+
+  "NmapVulnScanner": [
+    "Consulting the Grand Map of Vulnerabilities…",
+    "Charting weaknesses in the kingdom walls…",
+    "Seeking cracks in the stonework…",
+    "The royal cartographer leaves no tower unchecked…",
+    "Hunting gremlins in the castle gears…",
+    "Casting a wide net across the digital realm…",
+    "Is thy fortress truly secure? Let us see…",
+    "Like a knight in shining firewall armor…",
+    "Navigating the labyrinth beneath the keep…",
+    "Searching every dungeon corner…",
+    "Fishing for phishy peasants…",
+    "Every weakness is but a loose brick in the wall…",
+    "A deep dive into the moat’s secrets…",
+    "Almost there… revealing hidden passages…"
+  ],
+
+  "RDPBruteforce": [
+    "Thou hast left the gatehouse unguarded? Bold…",
+    "Let us test the strength of thy gatekeeper’s oath…",
+    "A weak password is but a rotten drawbridge…",
+    "I shall knock upon thy gate… repeatedly…",
+    "Guard thy entrance well, lest the battering ram speak!"
+  ],
+
+  "SSHBruteforce": [
+    "Ah, a hidden tunnel beneath the castle!",
+    "Didst thou change the default passphrase, or shall I stroll in?",
+    "Testing the strength of thy tunnel wards…",
+    "Trying the old master keys…",
+    "A privileged tunnel demands vigilant guards…",
+    "Shall we see how sturdy thy secret passage is?",
+    "The more fortified the tunnel, the greater the glory!"
+  ],
+
+  "FTPBruteforce": [
+    "Still using unguarded wagons for supplies?",
+    "Cleartext scrolls? Brave… and foolish.",
+    "Let us see how secure thy supply crates are…",
+    "Attempting entry to the trade depot…",
+    "A careless quartermaster invites raiders…"
+  ],
+
+  "SMBBruteforce": [
+    "Have you checked the treasury locks, my lord?",
+    "An unguarded vault tempts many thieves…",
+    "Testing the vault’s iron hinges…",
+    "Attempting to open the royal coffers…",
+    "Weak seals invite plunder…"
+  ],
+
+  "TelnetBruteforce": [
+    "Telnet? An ancient, unenchanted gate?",
+    "Clear words spoken across the field? Risky…",
+    "Time to test this relic of the old kingdom…",
+    "Breaking through the crumbling wooden door…"
+  ],
+
+  "SQLBruteforce": [
+    "The royal archives hold many secrets…",
+    "Guard thy scribes well!",
+    "Attempting entry to the grand library…",
+    "Cracking the archivist’s cipher…",
+    "A breach here could expose the crown’s secrets…"
+  ],
+
+  "StealFilesSSH": [
+    "Ah, treasure chests await!",
+    "Let us see what scrolls lie within…",
+    "Gathering the kingdom’s secrets…",
+    "The keys to the kingdom now rest in my gauntlet…",
+    "Plundering the hidden tunnel archives…"
+  ],
+
+  "StealFilesSMB": [
+    "The treasury vault stands open…",
+    "Gathering riches from the royal coffers…",
+    "These vault records may prove valuable…",
+    "Plundering the kingdom’s shared riches…"
+  ],
+
+  "StealFilesTelnet": [
+    "The ancient gate yields forgotten scrolls…",
+    "Recovering relics from the old wooden door…",
+    "Gathering secrets from this dusty corridor…"
+  ],
+
+  "StealFilesFTP": [
+    "Raiding the supply wagons…",
+    "Inspecting unsecured cargo crates…",
+    "These trade manifests may be useful…"
+  ],
+
+  "StealDataSQL": [
+    "The royal archives are ripe for plunder…",
+    "Extracting secrets from the grand library…",
+    "Copying the crown’s confidential records…",
+    "The scribes wrote too much… and guarded too little…"
+  ],
+
+  "LogStandalone": [
+    "Reading the royal chronicles…",
+    "Examining the castle guard logs…",
+    "Searching for signs of betrayal…",
+    "Watching for suspicious messengers…",
+    "Analyzing failed gate entries…",
+    "Investigating whispers of siege…",
+    "Monitoring the health of the realm…",
+    "Reviewing the scribes’ error scrolls…",
+    "Looking for treachery in the margins…"
+  ],
+
+  "LogStandalone2": [
+    " signs",
+    " signs of"
+  ],
+
+  "ZombifySSH": [
+    "Beware… fallen knights rise again…",
+    "Summoning a legion of cursed warriors…",
+    "The undead march from breached tunnels…",
+    "Raising fallen servers into dark service…",
+    "The plague spreads across the realm…",
+    "Deploying the undead battalion…",
+    "The castle trembles beneath the zombie horde…",
+    "The necromancer’s work begins…",
+	"Zombie Joe is on the hunt for brains… you're safe!…"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+    "display_name": "LOKI",
+    "menu_title": "LOKI",
+    "show_menu_title": false,
+    "show_settings_title": false,
+    "show_pause_title": false,
+    "web_title": "LOKI",
+    "bg_color": [238, 147, 254],
+    "text_color": [0, 0, 0],
+    "accent_color": [0, 0, 0],
+    "title_font_color": [0, 0, 0],
+    "title_font_size": 26,
+    "title_y_offset": 3,
+    "animation_mode": "sequential",
+    "image_display_delaymin": 1.5,
+    "image_display_delaymax": 2,
+    "comment_delaymin": 15,
+    "comment_delaymax": 30,
+    "moods": {
+        "target": "Vendetta",
+        "swarm": "Chaotic",
+        "recon": "Slither"
+    },
+    "menu_colors": {
+        "bg": [18, 22, 18],
+        "title": [100, 190, 90],
+        "selected": [130, 210, 110],
+        "unselected": [140, 155, 140],
+        "on": [90, 180, 80],
+        "off": [100, 60, 60],
+        "dim": [70, 85, 70],
+        "warning": [180, 160, 50],
+        "submenu": [100, 190, 90]
+    },
+    "pause_menu_colors": {
+        "bg": [18, 22, 18],
+        "text": [130, 210, 110],
+        "accent": [60, 100, 60]
+    },
+    "web": {
+        "bg_dark": "#0a120a",
+        "bg_surface": "#121a12",
+        "bg_elevated": "#1a251a",
+        "accent": "#5ebd45",
+        "accent_bright": "#7ed860",
+        "accent_dim": "#3a8a28",
+        "text_primary": "#d4e8d4",
+        "text_secondary": "#7e9a7e",
+        "text_muted": "#566b56",
+        "border": "#263a26",
+        "border_light": "#364a36",
+        "glow": "0 0 12px rgba(94, 189, 69, 0.25)",
+        "font_title": "'Viking', 'Georgia', serif",
+        "nav_label_display": "Display"
+    }
+}

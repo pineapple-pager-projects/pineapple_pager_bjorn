@@ -1,0 +1,56 @@
+{
+    "display_name": "Sir Haxalot",
+    "menu_title": "Sir Haxalot",
+	"show_menu_title": false,
+    "show_settings_title": false,
+    "show_pause_title": false,
+    "web_title": "Sir Haxalot",
+    "bg_color": [255, 255, 255],
+    "text_color": [0, 0, 0],
+    "accent_color": [128, 128, 128],
+    "title_font_color": [0, 0, 0],
+    "title_font_size": 20,
+    "title_y_offset": 3,
+    "animation_mode": "sequential",
+    "image_display_delaymin": 3,
+    "image_display_delaymax": 6,
+    "comment_delaymin": 15,
+    "comment_delaymax": 30,
+    "moods": {
+        "target": "Crusading",
+        "swarm": "Berserker",
+        "recon": "Chivalrous"
+    },
+	"menu_colors": {
+        "bg": [35, 20, 25],
+        "title": [220, 180, 60],
+        "selected": [240, 200, 80],
+        "unselected": [190, 160, 130],
+        "on": [200, 170, 60],
+        "off": [160, 60, 60],
+        "dim": [110, 85, 80],
+        "warning": [220, 100, 50],
+        "submenu": [220, 180, 60]
+    },
+    "pause_menu_colors": {
+        "bg": [35, 20, 25],
+        "text": [240, 200, 80],
+        "accent": [140, 100, 80]
+    },
+    "web": {
+        "bg_dark": "#12151a",
+        "bg_surface": "#1a1e25",
+        "bg_elevated": "#242a33",
+        "accent": "#7090b0",
+        "accent_bright": "#90b0d0",
+        "accent_dim": "#506878",
+        "text_primary": "#d0d8e0",
+        "text_secondary": "#8090a0",
+        "text_muted": "#506070",
+        "border": "#2a3040",
+        "border_light": "#3a4555",
+        "glow": "0 0 12px rgba(112, 144, 176, 0.25)",
+        "font_title": "'MedievalSharp', 'Georgia', serif",
+        "nav_label_display": "Display"
+    }
+}

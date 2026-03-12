@@ -1,0 +1,132 @@
+# Bjorn Test Targets - Vulnerable services for testing attack modules
+# All services share a single IP (172.16.52.228) via network_mode
+# so Bjorn discovers one host with all ports open.
+# Network: 172.16.52.0/24 (USB network - Pager at 172.16.52.1)
+# Run: docker-compose up -d
+# Stop: docker-compose down
+
+services:
+  # Base container - SSH server with weak credentials (minimal Alpine-based)
+  # All other services join this container's network namespace.
+  # Credentials: admin:admin, root:root, test:test
+  ssh-target:
+    build:
+      context: ./ssh
+      dockerfile: Dockerfile
+    container_name: bjorn-target
+    hostname: bjorn-target
+    ports:
+      - "21:21"
+      - "22:22"
+      - "23:23"
+      - "80:80"
+      - "139:139"
+      - "445:445"
+      - "3306:3306"
+      - "3389:3389"
+      - "8080:8080"
+      - "21100-21110:21100-21110"
+    networks:
+      bjorn-testnet:
+        ipv4_address: 172.16.52.228
+
+  # FTP server with weak credentials
+  # Credentials: admin:admin, anonymous (no password)
+  ftp-target:
+    image: fauria/vsftpd
+    container_name: bjorn-ftp-target
+    depends_on:
+      - ssh-target
+    network_mode: service:ssh-target
+    environment:
+      - FTP_USER=admin
+      - FTP_PASS=admin
+      - PASV_ADDRESS=172.16.52.228
+      - PASV_MIN_PORT=21100
+      - PASV_MAX_PORT=21110
+    volumes:
+      - ./ftp_data:/home/vsftpd/admin
+
+  # SMB/Samba server with weak credentials and open share
+  # public: anonymous/guest access (no auth required)
+  # private: requires admin:admin credentials
+  smb-target:
+    image: dperson/samba
+    container_name: bjorn-smb-target
+    depends_on:
+      - ssh-target
+    network_mode: service:ssh-target
+    environment:
+      - TZ=UTC
+    command: >
+      -u "admin;admin"
+      -s "public;/share;yes;no;yes;all;none"
+      -s "private;/private;yes;no;no;admin"
+      -g "server min protocol = NT1"
+      -g "client min protocol = NT1"
+      -g "map to guest = Bad User"
+    volumes:
+      - ./smb_share:/share
+      - ./smb_private:/private
+
+  # MySQL server with weak credentials
+  # Credentials: root:root, admin:admin
+  # Using MariaDB for ARM64 compatibility
+  mysql-target:
+    image: mariadb:10.6
+    container_name: bjorn-mysql-target
+    depends_on:
+      - ssh-target
+    network_mode: service:ssh-target
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=testdb
+      - MYSQL_USER=admin
+      - MYSQL_PASSWORD=admin
+    volumes:
+      - ./mysql_init:/docker-entrypoint-initdb.d
+
+  # Telnet server with weak credentials
+  # Credentials: admin:admin, root:root
+  telnet-target:
+    build:
+      context: ./telnet
+      dockerfile: Dockerfile
+    container_name: bjorn-telnet-target
+    depends_on:
+      - ssh-target
+    network_mode: service:ssh-target
+
+  # HTTP server - intentionally vulnerable Apache for nmap vuln script testing
+  # Triggers: http-enum, http-shellshock, http-trace, http-cookie-flags,
+  #   http-csrf, http-cross-domain-policy, http-internal-ip-disclosure,
+  #   http-method-tamper, http-slowloris-check, http-git, http-vuln-cve2012-1823
+  http-target:
+    build:
+      context: ./http
+      dockerfile: Dockerfile
+    container_name: bjorn-http-target
+    depends_on:
+      - ssh-target
+    network_mode: service:ssh-target
+    volumes:
+      - ./web_root:/var/www/html
+
+  # RDP server with weak credentials (NLA mock server)
+  # Credentials: admin:admin, root:root
+  rdp-target:
+    build:
+      context: ./rdp
+      dockerfile: Dockerfile
+    container_name: bjorn-rdp-target
+    depends_on:
+      - ssh-target
+    network_mode: service:ssh-target
+
+networks:
+  bjorn-testnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.52.0/24
+          gateway: 172.16.52.1

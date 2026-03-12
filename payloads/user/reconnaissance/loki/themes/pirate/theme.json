@@ -1,0 +1,56 @@
+{
+    "display_name": "Cap'n Plndr",
+    "menu_title": "Cap'n Plndr",
+    "show_menu_title": false,
+    "show_settings_title": false,
+    "show_pause_title": false,
+    "web_title": "Cap'n Plndr",
+    "bg_color": [255, 255, 255],
+    "text_color": [0, 0, 0],
+    "accent_color": [128, 128, 128],
+    "title_font_color": [101, 67, 33],
+    "title_font_size": 30,
+    "title_y_offset": 0,
+    "animation_mode": "random",
+    "image_display_delaymin": 7,
+    "image_display_delaymax": 15,
+    "comment_delaymin": 10,
+    "comment_delaymax": 20,
+    "moods": {
+        "target": "Plundering",
+        "swarm": "Broadside",
+        "recon": "Parley"
+    },
+    "menu_colors": {
+        "bg": [25, 20, 15],
+        "title": [200, 160, 60],
+        "selected": [220, 180, 80],
+        "unselected": [160, 140, 110],
+        "on": [180, 150, 60],
+        "off": [130, 70, 50],
+        "dim": [90, 80, 65],
+        "warning": [190, 110, 40],
+        "submenu": [200, 160, 60]
+    },
+    "pause_menu_colors": {
+        "bg": [25, 20, 15],
+        "text": [220, 180, 80],
+        "accent": [120, 95, 65]
+    },
+    "web": {
+        "bg_dark": "#0f1a1f",
+        "bg_surface": "#162028",
+        "bg_elevated": "#1e2d38",
+        "accent": "#c9943a",
+        "accent_bright": "#e5b44e",
+        "accent_dim": "#8b6914",
+        "text_primary": "#d8d0c0",
+        "text_secondary": "#8a9a8e",
+        "text_muted": "#5a6a5e",
+        "border": "#253540",
+        "border_light": "#354a55",
+        "glow": "0 0 12px rgba(201, 148, 58, 0.25)",
+        "font_title": "'Pirate', 'Georgia', serif",
+        "nav_label_display": "Display"
+    }
+}

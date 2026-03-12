@@ -1,0 +1,59 @@
+{
+    "display_name": "BJORN",
+    "menu_title": "BJORN",
+    "show_menu_title": false,
+    "show_settings_title": false,
+    "show_pause_title": false,
+    "web_title": "Bjorn Cyberviking",
+    "bg_color": [255, 255, 255],
+    "text_color": [0, 0, 0],
+    "accent_color": [128, 128, 128],
+    "title_font_color": [0, 0, 0],
+    "title_font_size": 26,
+    "title_y_offset": 3,
+    "animation_mode": "random",
+    "image_display_delaymin": 2,
+    "image_display_delaymax": 8,
+    "comment_delaymin": 15,
+    "comment_delaymax": 30,
+    "moods": {
+        "target": "Raiding",
+        "swarm": "Berserker",
+        "recon": "Scouting"
+    },
+    "menu_colors": {
+        "bg": [30, 25, 20],
+        "title": [210, 180, 120],
+        "selected": [230, 195, 130],
+        "unselected": [170, 155, 135],
+        "on": [180, 160, 100],
+        "off": [140, 90, 70],
+        "dim": [100, 90, 75],
+        "warning": [200, 130, 60],
+        "submenu": [210, 180, 120]
+    },
+    "pause_menu_colors": {
+        "bg": [30, 25, 20],
+        "text": [210, 190, 150],
+        "accent": [140, 120, 90],
+        "main_menu": [180, 150, 80],
+        "launcher": [120, 140, 160],
+        "exit": [160, 70, 50]
+    },
+    "web": {
+        "bg_dark": "#1a1510",
+        "bg_surface": "#231e17",
+        "bg_elevated": "#2e261d",
+        "accent": "#e99f00",
+        "accent_bright": "#ffb829",
+        "accent_dim": "#b87d00",
+        "text_primary": "#e8e0d4",
+        "text_secondary": "#9a8e7e",
+        "text_muted": "#6b6156",
+        "border": "#3a3226",
+        "border_light": "#4a4236",
+        "glow": "0 0 12px rgba(233, 159, 0, 0.25)",
+        "font_title": "'Viking', 'Georgia', serif",
+        "nav_label_display": "Display"
+    }
+}

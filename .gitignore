@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# Python bytecode (regenerated automatically)
+__pycache__/
+*.pyc
+# But keep bundled .pyc in lib/ (these are the only form of the code for vendored packages)
+!payloads/user/reconnaissance/loki/lib/**/*.pyc
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Runtime data created on Pager
+loot/
+logs/
+*.log
+
+# Local dev
+.env
+libs-old/
+dev_backup/
+
+# Archives / source files
+*.zip
+*.psd
+
+# Build outputs
+build-output/
+src/openssl-3.0.13/
+

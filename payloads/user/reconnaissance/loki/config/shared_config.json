@@ -1,0 +1,88 @@
+{
+    "__title_attacks__": "Attack Settings",
+    "manual_mode": false,
+    "clear_hosts_on_startup": false,
+    "brute_force_running": true,
+    "file_steal_running": true,
+    "scan_vuln_running": true,
+    "attack_order": "spread",
+
+    "__title_retry__": "Retry Settings",
+    "retry_success_actions": false,
+    "retry_failed_actions": true,
+    "failed_retry_delay": 600,
+    "success_retry_delay": 900,
+
+    "__title_network__": "Network & Scanning",
+    "scan_interval": 180,
+    "scan_network_prefix": 24,
+    "nmap_scan_aggressivity": "-T2",
+    "vuln_scan_timeout": 120,
+    "portstart": 1,
+    "portend": 2,
+    "portlist": [
+        20, 21, 22, 23, 25, 53, 69, 80, 110, 111,
+        135, 137, 139, 143, 161, 162, 389, 443, 445,
+        512, 513, 514, 587, 636, 993, 995, 1080,
+        1433, 1521, 2049, 3306, 3389,
+        5000, 5001, 5432, 5900, 8080, 8443, 9090, 10000
+    ],
+    "blacklistcheck": true,
+    "blacklist_gateway": true,
+    "mac_scan_blacklist": [],
+    "ip_scan_blacklist": [],
+
+    "__title_stealing__": "File Stealing",
+    "steal_file_names": [
+        "ssh.csv", "hack.txt", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
+        "authorized_keys", "known_hosts", ".netrc", ".pgpass", ".my.cnf",
+        ".env", ".bashrc", ".bash_history", ".zsh_history",
+        "wp-config.php", "config.php", "settings.py", "database.yml",
+        ".htaccess", ".htpasswd", "/etc/passwd", "/etc/shadow",
+        "credentials", "secrets"
+    ],
+    "steal_file_extensions": [
+        ".bjorn", ".hack", ".flag", ".pem", ".key", ".p12", ".pfx",
+        ".sql", ".sqlite", ".db", ".csv", ".kdbx", ".kdb"
+    ],
+    "steal_max_depth": 3,
+    "steal_max_files": 500,
+
+    "__title_timing__": "Delay Settings",
+    "startup_delay": 10,
+    "web_delay": 2,
+    "comment_delaymin": 15,
+    "comment_delaymax": 30,
+    "image_display_delaymin": 7,
+    "image_display_delaymax": 15,
+    "timewait_smb": 0,
+    "timewait_ssh": 0,
+    "timewait_telnet": 0,
+    "timewait_ftp": 0,
+    "timewait_sql": 0,
+    "timewait_rdp": 0,
+
+    "__title_performance__": "Performance",
+    "worker_threads": 5,
+    "max_failed_retries": 3,
+    "bruteforce_attempt_timeout": 30,
+    "bruteforce_max_retries": 3,
+    "bruteforce_max_total_retries": 15,
+    "displaying_csv": true,
+
+    "__title_logging__": "Logging",
+    "log_debug": false,
+    "log_info": true,
+    "log_warning": true,
+    "log_error": true,
+    "log_critical": true,
+
+    "__title_display__": "Display",
+    "screen_brightness": 80,
+    "screen_dim_brightness": 25,
+    "screen_dim_timeout": 60,
+    "screen_rotation": 270,
+
+    "__title_theme__": "Theme",
+    "theme": "loki"
+}
