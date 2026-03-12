@@ -2,6 +2,8 @@
   <img src="loki.png" alt="Loki">
 </p>
 
+<h3 align="center"><b>L</b>AN <b>O</b>rchestrated <b>K</b>ey <b>I</b>nfiltrator</h3>
+
 A rewrite of [Bjorn](https://github.com/infinition/Bjorn) by infinition — the autonomous network reconnaissance Tamagotchi — for the WiFi Pineapple Pager. Improved with custom themes, hi-res graphics, web UI, and expanded attack functionality.
 
 <p align="center">
