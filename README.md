@@ -102,8 +102,8 @@ HTTP ports use batched NSE scripts optimized for MIPS to avoid CPU starvation. N
 
 - WiFi Pineapple Pager
 - **Network connection** — Pager must be connected to a network to scan (WiFi client mode or Ethernet/USB)
-- **Internet connection** (first run only) — Required to install Python3 and nmap via opkg
-- All Python dependencies are bundled in `lib/` — only system packages need internet
+- **Internet connection** (first run only) — Required to install Python3 via opkg
+- Nmap and all Python dependencies are bundled — only Python3 itself needs internet
 
 ## Installation
 
@@ -555,8 +555,8 @@ A Docker-based vulnerable test environment is provided in `test_targets/`. See [
 ## Troubleshooting
 
 ### Loki won't start
-- Check that the Pager has internet access (required for first run to install dependencies)
-- The payload automatically installs Python3 and nmap — check the display for installation progress
+- Check that the Pager has internet access (required for first run to install Python3)
+- The payload automatically installs Python3 via opkg — check the display for installation progress
 - If installation fails, try running the payload again with internet connectivity
 
 ### No hosts discovered
