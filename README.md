@@ -4,7 +4,7 @@
 
 <h3 align="center"><b>L</b>AN <b>O</b>rchestrated <b>K</b>ey <b>I</b>nfiltrator</h3>
 
-Inspired by infinition's [Bjorn](https://github.com/infinition/Bjorn) project — the autonomous network reconnaissance Tamagotchi. Rewritten for the WiFi Pineapple Pagerand improved with custom themes, hi-res graphics, web UI, and enhanced attack functionality.
+Inspired by infinition's [Bjorn](https://github.com/infinition/Bjorn) project — the autonomous network reconnaissance Tamagotchi. Rewritten for the WiFi Pineapple Pager and improved with custom themes, hi-res graphics, web UI, and enhanced attack functionality.
 
 <p align="center">
   <img src="screenshots/13-pager-brute-force.png" width="240" alt="Brute Force">
