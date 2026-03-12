@@ -14,53 +14,63 @@ Loki supports a full theme system that customizes the display name, fonts, color
 
 ### Loki (Default)
 
-<p align="center">
-  <img src="screenshots/18-loki-theme-menu.png" width="480" alt="Loki Menu">
-</p>
-<p align="center">
-  <img src="screenshots/26-loki-theme-landscape.png" width="320" alt="Loki Landscape">
-  <img src="screenshots/31-loki-theme-portrait.png" width="148" alt="Loki Portrait">
-</p>
+<table><tr>
+<td valign="top">
+  <img src="screenshots/18-loki-theme-menu.png" width="380" alt="Loki Menu"><br>
+  <img src="screenshots/26-loki-theme-landscape.png" width="380" alt="Loki Landscape">
+</td>
+<td valign="top">
+  <img src="screenshots/31-loki-theme-portrait.png" width="175" alt="Loki Portrait">
+</td>
+</tr></table>
 
 ### Bjorn
 
-<p align="center">
-  <img src="screenshots/20-bjorn-theme-menu.png" width="480" alt="Bjorn Menu">
-</p>
-<p align="center">
-  <img src="screenshots/28-bjorn-theme-landscape.png" width="320" alt="Bjorn Landscape">
-  <img src="screenshots/33-bjorn-theme-portrait.png" width="148" alt="Bjorn Portrait">
-</p>
+<table><tr>
+<td valign="top">
+  <img src="screenshots/20-bjorn-theme-menu.png" width="380" alt="Bjorn Menu"><br>
+  <img src="screenshots/28-bjorn-theme-landscape.png" width="380" alt="Bjorn Landscape">
+</td>
+<td valign="top">
+  <img src="screenshots/33-bjorn-theme-portrait.png" width="175" alt="Bjorn Portrait">
+</td>
+</tr></table>
 
 ### ClownSec
 
-<p align="center">
-  <img src="screenshots/21-clown-theme-menu.png" width="480" alt="ClownSec Menu">
-</p>
-<p align="center">
-  <img src="screenshots/29-clown-theme-landscape.png" width="320" alt="ClownSec Landscape">
-  <img src="screenshots/34-clown-theme-portrait.png" width="148" alt="ClownSec Portrait">
-</p>
+<table><tr>
+<td valign="top">
+  <img src="screenshots/21-clown-theme-menu.png" width="380" alt="ClownSec Menu"><br>
+  <img src="screenshots/29-clown-theme-landscape.png" width="380" alt="ClownSec Landscape">
+</td>
+<td valign="top">
+  <img src="screenshots/34-clown-theme-portrait.png" width="175" alt="ClownSec Portrait">
+</td>
+</tr></table>
 
 ### Cap'n Plndr (Pirate)
 
-<p align="center">
-  <img src="screenshots/19-pirate-theme-menu.png" width="480" alt="Pirate Menu">
-</p>
-<p align="center">
-  <img src="screenshots/27-pirate-theme-landscape.png" width="320" alt="Pirate Landscape">
-  <img src="screenshots/32-pirate-theme-portrait.png" width="148" alt="Pirate Portrait">
-</p>
+<table><tr>
+<td valign="top">
+  <img src="screenshots/19-pirate-theme-menu.png" width="380" alt="Pirate Menu"><br>
+  <img src="screenshots/27-pirate-theme-landscape.png" width="380" alt="Pirate Landscape">
+</td>
+<td valign="top">
+  <img src="screenshots/32-pirate-theme-portrait.png" width="175" alt="Pirate Portrait">
+</td>
+</tr></table>
 
 ### Sir Haxalot (Knight)
 
-<p align="center">
-  <img src="screenshots/22-knight-theme-menu.png" width="480" alt="Knight Menu">
-</p>
-<p align="center">
-  <img src="screenshots/30-knight-theme-landscape.png" width="320" alt="Knight Landscape">
-  <img src="screenshots/35-knight-theme-portrait.png" width="148" alt="Knight Portrait">
-</p>
+<table><tr>
+<td valign="top">
+  <img src="screenshots/22-knight-theme-menu.png" width="380" alt="Knight Menu"><br>
+  <img src="screenshots/30-knight-theme-landscape.png" width="380" alt="Knight Landscape">
+</td>
+<td valign="top">
+  <img src="screenshots/35-knight-theme-portrait.png" width="175" alt="Knight Portrait">
+</td>
+</tr></table>
 
 ## Switching Themes
 

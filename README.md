@@ -210,9 +210,18 @@ Loki includes a full web UI at `http://<pager-ip>:8000` with Dashboard, Hosts, A
   <img src="screenshots/02-webui-dashboard.png" width="700" alt="Web UI Dashboard">
 </p>
 
+### Display Modes
+
+Loki supports both landscape and portrait orientations, switchable from the startup menu or config. All themes, menus, and the pause screen adapt to the selected orientation.
+
+<p align="center">
+  <img src="screenshots/26-loki-theme-landscape.png" width="380" alt="Loki Landscape">
+  <img src="screenshots/31-loki-theme-portrait.png" width="148" alt="Loki Portrait">
+</p>
+
 ### Themes
 
-Loki ships with 5 themes, each with custom animations, colors, fonts, menus, and commentary personality. All themes support portrait and landscape orientations. See [THEME_README.md](THEME_README.md) for full details and a guide to creating custom themes.
+Loki ships with 5 themes, each with custom animations, colors, fonts, menus, and commentary personality. All themes support both orientations. See [THEME_README.md](THEME_README.md) for full details and a guide to creating custom themes.
 
 | Theme | Display Name | Creator | Description |
 |-------|-------------|---------|-------------|
