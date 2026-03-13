@@ -4,15 +4,30 @@ Loki supports a full theme system that customizes the display name, fonts, color
 
 ## Included Themes
 
-| Theme | Display Name | Animation Mode | Author |
-|-------|-------------|----------------|--------|
-| `loki` | LOKI | Sequential | brAinphreAk |
-| `bjorn` | BJORN | Random | infinition |
-| `clown` | ClownSec | Random | brAinphreAk |
-| `pirate` | Cap'n Plndr | Random | brAinphreAk |
-| `knight` | Sir Haxalot | Sequential | Zombie Joe |
+| Theme | Menu Title | Display Name | Animation Mode | Author |
+|-------|-----------|-------------|----------------|--------|
+| `loki_dark` | Loki (Dark) | LOKI | Sequential | brAinphreAk |
+| `loki` | Loki (Light) | LOKI | Sequential | brAinphreAk |
+| `bjorn` | BJORN | BJORN | Random | infinition |
+| `clown` | ClownSec | CLOWNSEC | Random | brAinphreAk |
+| `pirate` | Cap'n Plndr | CAP'N PLNDR | Random | brAinphreAk |
+| `knight` | Sir Haxalot | SIR HAXALOT | Sequential | Zombie Joe |
 
-### Loki (Default)
+### Loki Dark (Default)
+
+Black background with green text — classic hacker terminal aesthetic. Uses the same character animations and menu backgrounds as Loki (Light).
+
+<table><tr>
+<td valign="top">
+  <img src="screenshots/18-loki-theme-menu.png" width="380" alt="Loki Dark Menu"><br>
+  <img src="screenshots/36-loki-theme-dark-landscape.png" width="380" alt="Loki Dark Landscape">
+</td>
+<td valign="top">
+  <img src="screenshots/37-loki-theme-dark-portrait.png" width="175" alt="Loki Dark Portrait">
+</td>
+</tr></table>
+
+### Loki (Light)
 
 <table><tr>
 <td valign="top">
@@ -89,6 +104,7 @@ Each theme defines custom labels for the three mood presets available in the Set
 
 | Theme | Target | Swarm | Recon |
 |-------|--------|-------|-------|
+| loki_dark | Vendetta | Chaotic | Slither |
 | loki | Vendetta | Chaotic | Slither |
 | bjorn | Raiding | Berserker | Scouting |
 | clown | Psychotic | Silly | Mime Mode |
@@ -266,7 +282,7 @@ A complete `theme.json` with all available fields:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `display_name` | Yes | Shown in the LCD header bar (e.g., "LOKI", "CLOWNSEC") |
-| `menu_title` | Yes | Shown on the startup menu screen |
+| `menu_title` | Yes | Shown in the theme selector on the startup menu |
 | `web_title` | Yes | Browser tab title for the web UI |
 
 #### Title Visibility

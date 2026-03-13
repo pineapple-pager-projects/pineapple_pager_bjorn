@@ -1014,8 +1014,7 @@ class Display:
 
         self.pager.fill_rect(L["x"], L["y"], L["w"], L["h"], self.BG_COLOR)
         if self.orientation == "landscape":
-            # Skip top/bottom/left border lines — frise serves as left edge
-            self.pager.vline(L["x"] + L["w"] - 1, L["y"], L["h"], self.TEXT_COLOR)
+            pass  # No border lines — frise serves as left edge, right edge is screen boundary
         else:
             # Top and bottom lines only — no left/right borders at screen edge
             self.pager.hline(L["x"], L["y"], L["w"], self.TEXT_COLOR)
@@ -1072,8 +1071,7 @@ class Display:
 
         self.pager.fill_rect(L["x"], L["y"], L["w"], L["h"], self.BG_COLOR)
         if self.orientation == "landscape":
-            # Skip left border — frise serves as left edge
-            self.pager.vline(L["x"] + L["w"] - 1, L["y"], L["h"], self.TEXT_COLOR)
+            # No left border (frise is left edge) or right border (screen edge)
             self.pager.hline(L["x"], L["y"], L["w"], self.TEXT_COLOR)
             self.pager.hline(L["x"], L["y"] + L["h"] - 1, L["w"], self.TEXT_COLOR)
         else:
@@ -1115,8 +1113,7 @@ class Display:
 
         self.pager.fill_rect(L["x"], L["y"], L["w"], L["h"], self.BG_COLOR)
         if self.orientation == "landscape":
-            # Skip bottom/left border — frise serves as left edge
-            self.pager.vline(L["x"] + L["w"] - 1, L["y"], L["h"], self.TEXT_COLOR)
+            # No left border (frise is left edge) or right border (screen edge)
             self.pager.hline(L["x"], L["y"], L["w"], self.TEXT_COLOR)
         else:
             # Top and bottom lines only — no left/right borders at screen edge

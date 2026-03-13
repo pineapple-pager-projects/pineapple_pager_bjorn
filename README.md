@@ -41,7 +41,7 @@ Loki is a Tamagotchi-style autonomous network reconnaissance companion. It autom
 - **LCD Display** — Status updates on the Pager's full color screen with themed character animations and auto-dim for battery saving
 - **Battery Indicator** — Real-time battery percentage in the header with charging state, auto-hides when unavailable
 - **Real-Time Stats** — Data stolen counter updates immediately as files are exfiltrated. All stats refresh in real time.
-- **Theme System** — 5 themes with custom animations, colors, fonts, and commentary. See [THEME_README.md](THEME_README.md) for details.
+- **Theme System** — 6 themes with custom animations, colors, fonts, and commentary. See [THEME_README.md](THEME_README.md) for details.
 
 ## Supported Protocols
 
@@ -223,18 +223,20 @@ Loki supports both landscape and portrait orientations, switchable from the star
 
 ### Themes
 
-Loki ships with 5 themes, each with custom animations, colors, fonts, menus, and commentary personality. All themes support both orientations. See [THEME_README.md](THEME_README.md) for full details and a guide to creating custom themes.
+Loki ships with 6 themes, each with custom animations, colors, fonts, menus, and commentary personality. All themes support both orientations. See [THEME_README.md](THEME_README.md) for full details and a guide to creating custom themes.
 
-| Theme | Display Name | Creator | Description |
-|-------|-------------|---------|-------------|
-| `loki` | LOKI | brAinphreAk | Default theme with Norse trickster personality |
+| Theme | Menu Title | Creator | Description |
+|-------|-----------|---------|-------------|
+| `loki_dark` | Loki (Dark) | brAinphreAk | Default theme — black background with green hacker aesthetic |
+| `loki` | Loki (Light) | brAinphreAk | Light theme with pink/purple Norse trickster personality |
 | `bjorn` | BJORN | infinition | Original Bjorn Viking theme |
 | `clown` | ClownSec | brAinphreAk | CLOWNSEC jester theme with circus commentary |
 | `pirate` | Cap'n Plndr | brAinphreAk | Pirate theme with seafaring personality |
 | `knight` | Sir Haxalot | Zombie Joe | Medieval knight theme with chivalric personality |
 
 <p align="center">
-  <img src="screenshots/26-loki-theme-landscape.png" width="240" alt="Loki">
+  <img src="screenshots/36-loki-theme-dark-landscape.png" width="240" alt="Loki Dark">
+  <img src="screenshots/26-loki-theme-landscape.png" width="240" alt="Loki Light">
   <img src="screenshots/28-bjorn-theme-landscape.png" width="240" alt="Bjorn">
   <img src="screenshots/29-clown-theme-landscape.png" width="240" alt="ClownSec">
   <img src="screenshots/27-pirate-theme-landscape.png" width="240" alt="Pirate">
@@ -324,7 +326,7 @@ Edit `config/shared_config.json` to customize Loki's behavior:
 ### Theme Settings
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `theme` | loki | Active theme folder name (see [THEME_README.md](THEME_README.md)) |
+| `theme` | loki_dark | Active theme folder name (see [THEME_README.md](THEME_README.md)) |
 | `override_theme_delays` | false | Use global config delay values instead of per-theme values |
 
 ### Logging Settings
@@ -480,7 +482,8 @@ loki/
 ├── data/
 │   └── kev_catalog.json       # CISA KEV vulnerability catalog
 ├── themes/                # Theme packs (see THEME_README.md)
-│   ├── loki/              # Default Loki theme
+│   ├── loki_dark/         # Default — Loki (Dark) theme
+│   ├── loki/              # Loki (Light) theme
 │   ├── bjorn/             # Original Viking theme
 │   ├── clown/             # CLOWNSEC jester theme
 │   ├── pirate/            # Cap'n Plndr pirate theme

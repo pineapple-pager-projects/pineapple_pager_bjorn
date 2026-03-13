@@ -104,11 +104,18 @@ class LokiMenu:
     def _discover_themes(self):
         """Scan themes/ directory for valid theme folders (must contain theme.json)."""
         themes = []
+        self.theme_display_names = {}
         if os.path.isdir(self.themes_dir):
             for name in sorted(os.listdir(self.themes_dir)):
                 theme_json = os.path.join(self.themes_dir, name, 'theme.json')
                 if os.path.isfile(theme_json):
                     themes.append(name)
+                    try:
+                        with open(theme_json, 'r') as f:
+                            td = json.load(f)
+                        self.theme_display_names[name] = td.get('menu_title', name)
+                    except Exception:
+                        self.theme_display_names[name] = name
         if not themes:
             themes = ['bjorn']
         return themes
@@ -321,14 +328,15 @@ class LokiMenu:
         })
 
         # Theme selector
-        theme_name = self.available_themes[theme_idx] if self.available_themes else 'bjorn'
-        max_theme = max(self.available_themes, key=len) if self.available_themes else theme_name
+        theme_key = self.available_themes[theme_idx] if self.available_themes else 'bjorn'
+        theme_display = self.theme_display_names.get(theme_key, theme_key)
+        max_theme_display = max(self.theme_display_names.values(), key=len) if self.theme_display_names else theme_display
         items.append({
             'toggle': True,
             'label': 'Theme:',
-            'value': theme_name,
+            'value': theme_display,
             'value_color': self.menu_title_color,
-            'max_value': max_theme,
+            'max_value': max_theme_display,
         })
 
         # Display orientation
