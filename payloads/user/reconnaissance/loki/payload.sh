@@ -109,8 +109,8 @@ if [ "$NEED_PYTHON" = true ] || [ "$NEED_CTYPES" = true ]; then
                 LOG "Updating package lists..."
                 opkg update 2>&1 | while IFS= read -r line; do LOG "  $line"; done
                 LOG ""
-                LOG "Installing Python3 + ctypes to MMC..."
-                opkg -d mmc install python3 python3-ctypes 2>&1 | while IFS= read -r line; do LOG "  $line"; done
+                LOG "Installing Python3 + dependencies to MMC..."
+                opkg -d mmc install python3 python3-ctypes python3-xml python3-urllib python3-openssl python3-uuid 2>&1 | while IFS= read -r line; do LOG "  $line"; done
                 LOG ""
                 # Verify installation succeeded
                 if command -v python3 >/dev/null 2>&1 && python3 -c "import ctypes" 2>/dev/null; then
