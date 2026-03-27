@@ -7,7 +7,7 @@
 Inspired by infinition's [Bjorn](https://github.com/infinition/Bjorn) project — the autonomous network reconnaissance Tamagotchi. Rewritten for the WiFi Pineapple Pager and improved with custom themes, hi-res graphics, web UI, and enhanced attack functionality.
 
 <p align="center">
-  <img src="screenshots/screenshots/36-loki-theme-dark-landscape.png" width="240" alt="dark landscape">
+  <img src="screenshots/36-loki-theme-dark-landscape.png" width="240" alt="dark landscape">
   <img src="screenshots/16-pager-vuln-scan.png" width="240" alt="Vuln Scan">
   <img src="screenshots/14-pager-steal-files.png" width="240" alt="Steal Files">
   <img src="screenshots/15-pager-network-scan.png" width="240" alt="Network Scan">
