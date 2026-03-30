@@ -738,20 +738,16 @@ class SharedData:
             pager = Pager()
             pager.init()
             pager.set_rotation(270)
-            bg = self.theme_bg_color
-            txt = self.theme_text_color
-            bg_color = pager.rgb(bg[0], bg[1], bg[2])
-            txt_color = pager.rgb(txt[0], txt[1], txt[2])
-            pager.clear(bg_color)
+            pager.clear(pager.BLACK)
             # Show theme title
             if hasattr(self, 'font_viking_path') and self.font_viking_path:
-                pager.draw_ttf_centered(80, self.display_name, txt_color, self.font_viking_path, 28.0)
+                pager.draw_ttf_centered(80, self.theme_name_display, pager.WHITE, self.font_viking_path, 28.0)
             # Show loading message
             font_path = self.font_arial_path if hasattr(self, 'font_arial_path') else ''
             if font_path:
-                pager.draw_ttf_centered(180, message, txt_color, font_path, 18.0)
+                pager.draw_ttf_centered(180, message, pager.WHITE, font_path, 18.0)
             else:
-                pager.draw_text_centered(180, message, txt_color, 2)
+                pager.draw_text_centered(180, message, pager.WHITE, 2)
             pager.flip()
             pager.cleanup()
         except Exception as e:
@@ -831,10 +827,8 @@ class SharedData:
         theme_dir = os.path.join(self.currentdir, "themes", theme_name)
 
         # Defaults (already set by load_fonts/load_images/initialize_paths)
-        self.display_name = "BJORN"
-        self.menu_title = "Pager Bjorn"
+        self.theme_name_display = "Loki"
         self.web_title = "Loki"
-        self.theme_bg_color = [255, 255, 255]
         self.theme_text_color = [0, 0, 0]
         self.theme_accent_color = [128, 128, 128]
         self.theme_preferred_orientation = None
@@ -845,7 +839,10 @@ class SharedData:
         self.theme_title_y_offset = 0
         self.theme_moods = {}
         self.theme_pause_menu_colors = {}
-        self.theme_show_pause_title = True
+        self.skin_bg_landscape = None
+        self.skin_bg_portrait = None
+        self.skin_layout_landscape = {}
+        self.skin_layout_portrait = {}
 
         # Load theme.json if the theme directory exists
         theme_json_path = os.path.join(theme_dir, "theme.json")
@@ -853,10 +850,8 @@ class SharedData:
             try:
                 with open(theme_json_path, 'r') as f:
                     theme_data = json.load(f)
-                self.display_name = theme_data.get("display_name", self.display_name)
-                self.menu_title = theme_data.get("menu_title", self.menu_title)
+                self.theme_name_display = theme_data.get("theme_name", self.theme_name_display)
                 self.web_title = theme_data.get("web_title", self.web_title)
-                self.theme_bg_color = theme_data.get("bg_color", self.theme_bg_color)
                 self.theme_text_color = theme_data.get("text_color", self.theme_text_color)
                 self.theme_accent_color = theme_data.get("accent_color", self.theme_accent_color)
                 self.theme_preferred_orientation = theme_data.get("preferred_orientation", None)
@@ -872,8 +867,7 @@ class SharedData:
                 self.theme_title_y_offset = theme_data.get("title_y_offset", 0)
                 self.theme_moods = theme_data.get("moods", {})
                 self.theme_pause_menu_colors = theme_data.get("pause_menu_colors", {})
-                self.theme_show_pause_title = theme_data.get("show_pause_title", True)
-                logger.debug(f"Loaded theme '{theme_name}': display_name='{self.display_name}'")
+                logger.debug(f"Loaded theme '{theme_name}': theme_name_display='{self.theme_name_display}'")
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Error reading theme.json for '{theme_name}': {e}")
         else:
@@ -932,6 +926,27 @@ class SharedData:
                     if theme_frames:
                         self.image_series[status] = theme_frames
                         logger.debug(f"Theme override: {len(theme_frames)} frames for {status}")
+
+        # Load skin background images if provided
+        if os.path.isdir(os.path.join(theme_dir, "images")):
+            skin_landscape = self._find_image(os.path.join(theme_dir, "images"), "main_bg")
+            skin_portrait = self._find_image(os.path.join(theme_dir, "images"), "main_bg_portrait")
+            if skin_landscape:
+                self.skin_bg_landscape = skin_landscape
+                logger.debug(f"Skin background (landscape): {skin_landscape}")
+            if skin_portrait:
+                self.skin_bg_portrait = skin_portrait
+                logger.debug(f"Skin background (portrait): {skin_portrait}")
+
+        # Load skin coordinate overrides from theme.json
+        if os.path.isfile(theme_json_path):
+            try:
+                with open(theme_json_path, 'r') as f:
+                    theme_data = json.load(f)
+                self.skin_layout_landscape = theme_data.get("skin_layout_landscape", {})
+                self.skin_layout_portrait = theme_data.get("skin_layout_portrait", {})
+            except (json.JSONDecodeError, IOError):
+                pass
 
 
     def update_lokistatus(self):

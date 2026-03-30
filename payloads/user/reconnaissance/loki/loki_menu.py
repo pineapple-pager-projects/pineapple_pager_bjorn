@@ -113,7 +113,7 @@ class LokiMenu:
                     try:
                         with open(theme_json, 'r') as f:
                             td = json.load(f)
-                        self.theme_display_names[name] = td.get('menu_title', name)
+                        self.theme_display_names[name] = td.get('theme_name', name)
                     except Exception:
                         self.theme_display_names[name] = name
         if not themes:
@@ -124,14 +124,12 @@ class LokiMenu:
         """Load menu_title, title_font, mood labels, colors, and bg images from the given theme."""
         self.active_theme = theme_name
         self.menu_title = "Loki"
-        self.show_menu_title = True
-        self.show_settings_title = True
         self.title_font = FONT_VIKING
         self.menu_font = FONT_DEJAVU
         self.theme_moods = {}
 
         # Default menu colors
-        self.menu_bg_color = Pager.BLACK
+        self.menu_bg_color = Pager.BLACK  # used for dialogs/submenus without skin images
         self.menu_title_color = TITLE_COLOR
         self.menu_selected_color = SELECTED_COLOR
         self.menu_unselected_color = UNSELECTED_COLOR
@@ -147,9 +145,7 @@ class LokiMenu:
             try:
                 with open(theme_json, 'r') as f:
                     theme_data = json.load(f)
-                self.menu_title = theme_data.get('menu_title', self.menu_title)
-                self.show_menu_title = theme_data.get('show_menu_title', True)
-                self.show_settings_title = theme_data.get('show_settings_title', True)
+                self.menu_title = theme_data.get('theme_name', self.menu_title)
                 self.theme_moods = theme_data.get('moods', {})
 
                 # Themeable menu colors
@@ -271,9 +267,7 @@ class LokiMenu:
         else:
             self.gfx.clear(self.menu_bg_color)
 
-        # Title using active theme font (can be hidden when baked into bg image)
-        if self.show_menu_title:
-            self.gfx.draw_ttf_centered(8, self.menu_title, self.menu_title_color, self.title_font, 40.0)
+        # Title is baked into menu background image
 
         # Menu items
         y = 55
@@ -538,8 +532,7 @@ class LokiMenu:
                 self.gfx.draw_image_file_scaled(0, 0, 480, 222, self.settings_bg)
             else:
                 self.gfx.clear(self.menu_bg_color)
-            if self.show_settings_title:
-                self.gfx.draw_ttf_centered(8, "SETTINGS", self.menu_submenu_color, self.menu_font, TTF_LARGE)
+            # Settings title is baked into settings background image
 
             manual = is_manual()
             y = 42

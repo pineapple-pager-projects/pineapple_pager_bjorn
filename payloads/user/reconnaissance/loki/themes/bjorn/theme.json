@@ -1,16 +1,16 @@
 {
-    "display_name": "BJORN",
-    "menu_title": "BJORN",
-    "show_menu_title": false,
-    "show_settings_title": false,
-    "show_pause_title": false,
+    "theme_name": "Bjorn",
     "web_title": "Bjorn Cyberviking",
-    "bg_color": [255, 255, 255],
-    "text_color": [0, 0, 0],
-    "accent_color": [128, 128, 128],
-    "title_font_color": [0, 0, 0],
-    "title_font_size": 26,
-    "title_y_offset": 3,
+    "text_color": [
+        0,
+        0,
+        0
+    ],
+    "accent_color": [
+        128,
+        128,
+        128
+    ],
     "animation_mode": "random",
     "image_display_delaymin": 2,
     "image_display_delaymax": 8,
@@ -22,23 +22,83 @@
         "recon": "Scouting"
     },
     "menu_colors": {
-        "bg": [30, 25, 20],
-        "title": [210, 180, 120],
-        "selected": [230, 195, 130],
-        "unselected": [170, 155, 135],
-        "on": [180, 160, 100],
-        "off": [140, 90, 70],
-        "dim": [100, 90, 75],
-        "warning": [200, 130, 60],
-        "submenu": [210, 180, 120]
+        "bg": [
+            30,
+            25,
+            20
+        ],
+        "title": [
+            210,
+            180,
+            120
+        ],
+        "selected": [
+            230,
+            195,
+            130
+        ],
+        "unselected": [
+            170,
+            155,
+            135
+        ],
+        "on": [
+            180,
+            160,
+            100
+        ],
+        "off": [
+            140,
+            90,
+            70
+        ],
+        "dim": [
+            100,
+            90,
+            75
+        ],
+        "warning": [
+            200,
+            130,
+            60
+        ],
+        "submenu": [
+            210,
+            180,
+            120
+        ]
     },
     "pause_menu_colors": {
-        "bg": [30, 25, 20],
-        "text": [210, 190, 150],
-        "accent": [140, 120, 90],
-        "main_menu": [180, 150, 80],
-        "launcher": [120, 140, 160],
-        "exit": [160, 70, 50]
+        "bg": [
+            30,
+            25,
+            20
+        ],
+        "text": [
+            210,
+            190,
+            150
+        ],
+        "accent": [
+            140,
+            120,
+            90
+        ],
+        "main_menu": [
+            180,
+            150,
+            80
+        ],
+        "launcher": [
+            120,
+            140,
+            160
+        ],
+        "exit": [
+            160,
+            70,
+            50
+        ]
     },
     "web": {
         "bg_dark": "#1a1510",
@@ -55,5 +115,185 @@
         "glow": "0 0 12px rgba(233, 159, 0, 0.25)",
         "font_title": "'Viking', 'Georgia', serif",
         "nav_label_display": "Display"
+    },
+    "skin_layout_landscape": {
+        "stats": {
+            "target": {
+                "x": 293,
+                "y": 7,
+                "align": "left"
+            },
+            "port": {
+                "x": 368,
+                "y": 7,
+                "align": "left"
+            },
+            "vuln": {
+                "x": 443,
+                "y": 7,
+                "align": "left"
+            },
+            "cred": {
+                "x": 293,
+                "y": 45,
+                "align": "left"
+            },
+            "zombie": {
+                "x": 368,
+                "y": 45,
+                "align": "left"
+            },
+            "data": {
+                "x": 443,
+                "y": 45,
+                "align": "left"
+            },
+            "gold": {
+                "x": 4,
+                "y": 77,
+                "align": "left"
+            },
+            "level": {
+                "x": 4,
+                "y": 197,
+                "align": "left"
+            },
+            "networkkb": {
+                "x": 201,
+                "y": 77,
+                "align": "left"
+            },
+            "attacks": {
+                "x": 201,
+                "y": 197,
+                "align": "left"
+            },
+            "align": "left"
+        },
+        "character": {
+            "x": 31,
+            "y": 49,
+            "w": 170,
+            "h": 170,
+            "align": "left"
+        },
+        "status": {
+            "icon_x": 257,
+            "icon_y": 79,
+            "icon_size": 46,
+            "text_x": 310,
+            "text_y": 80,
+            "sub_text_y": 105,
+            "main_font_size": 23,
+            "sub_font_size": 19,
+            "max_text_w": 166,
+            "align": "left"
+        },
+        "dialogue": {
+            "x": 257,
+            "y": 133,
+            "max_w": 219,
+            "font_size": 23,
+            "line_height": 21,
+            "max_lines": 4,
+            "margin": 4,
+            "align": "left"
+        },
+        "battery": {
+            "x": 209,
+            "y": 11,
+            "font_size": 18,
+            "align": "center"
+        }
+    },
+    "skin_layout_portrait": {
+        "stats": {
+            "target": {
+                "x": 38,
+                "y": 49,
+                "align": "left"
+            },
+            "port": {
+                "x": 112,
+                "y": 49,
+                "align": "left"
+            },
+            "vuln": {
+                "x": 186,
+                "y": 49,
+                "align": "left"
+            },
+            "cred": {
+                "x": 38,
+                "y": 87,
+                "align": "left"
+            },
+            "zombie": {
+                "x": 112,
+                "y": 87,
+                "align": "left"
+            },
+            "data": {
+                "x": 186,
+                "y": 87,
+                "align": "left"
+            },
+            "gold": {
+                "x": 4,
+                "y": 361,
+                "align": "left"
+            },
+            "level": {
+                "x": 4,
+                "y": 445,
+                "align": "left"
+            },
+            "networkkb": {
+                "x": 186,
+                "y": 361,
+                "align": "left"
+            },
+            "attacks": {
+                "x": 186,
+                "y": 445,
+                "align": "left"
+            },
+            "align": "left"
+        },
+        "character": {
+            "x": 38,
+            "y": 327,
+            "w": 145,
+            "h": 145,
+            "align": "left"
+        },
+        "status": {
+            "icon_x": 6,
+            "icon_y": 122,
+            "icon_size": 46,
+            "text_x": 60,
+            "text_y": 123,
+            "sub_text_y": 148,
+            "main_font_size": 23,
+            "sub_font_size": 19,
+            "max_text_w": 158,
+            "align": "left"
+        },
+        "dialogue": {
+            "x": 8,
+            "y": 180,
+            "max_w": 206,
+            "font_size": 23,
+            "line_height": 26,
+            "max_lines": 4,
+            "margin": 8,
+            "align": "left"
+        },
+        "battery": {
+            "x": 198,
+            "y": 10,
+            "font_size": 18,
+            "align": "center"
+        }
     }
 }

@@ -1,16 +1,16 @@
 {
-    "display_name": "LOKI",
-    "menu_title": "Loki (Dark)",
-    "show_menu_title": false,
-    "show_settings_title": false,
-    "show_pause_title": false,
+    "theme_name": "Loki (Dark)",
     "web_title": "LOKI",
-    "bg_color": [0, 0, 0],
-    "text_color": [0, 200, 60],
-    "accent_color": [0, 140, 40],
-    "title_font_color": [0, 200, 60],
-    "title_font_size": 26,
-    "title_y_offset": 3,
+    "text_color": [
+        0,
+        200,
+        60
+    ],
+    "accent_color": [
+        0,
+        140,
+        40
+    ],
     "animation_mode": "sequential",
     "image_display_delaymin": 1.5,
     "image_display_delaymax": 2,
@@ -22,20 +22,68 @@
         "recon": "Slither"
     },
     "menu_colors": {
-        "bg": [0, 0, 0],
-        "title": [0, 200, 60],
-        "selected": [0, 230, 80],
-        "unselected": [0, 120, 40],
-        "on": [0, 180, 50],
-        "off": [100, 50, 50],
-        "dim": [0, 80, 30],
-        "warning": [200, 180, 50],
-        "submenu": [0, 200, 60]
+        "bg": [
+            0,
+            0,
+            0
+        ],
+        "title": [
+            0,
+            200,
+            60
+        ],
+        "selected": [
+            0,
+            230,
+            80
+        ],
+        "unselected": [
+            0,
+            120,
+            40
+        ],
+        "on": [
+            0,
+            180,
+            50
+        ],
+        "off": [
+            100,
+            50,
+            50
+        ],
+        "dim": [
+            0,
+            80,
+            30
+        ],
+        "warning": [
+            200,
+            180,
+            50
+        ],
+        "submenu": [
+            0,
+            200,
+            60
+        ]
     },
     "pause_menu_colors": {
-        "bg": [0, 0, 0],
-        "text": [0, 200, 60],
-        "accent": [0, 100, 30]
+        "bg": [
+            0,
+            0,
+            0
+        ],
+        "text": [
+            0,
+            200,
+            60
+        ],
+        "accent": [
+            0,
+            100,
+            30
+        ]
     },
     "web": {
         "bg_dark": "#000000",
@@ -52,5 +100,185 @@
         "glow": "0 0 12px rgba(0, 200, 60, 0.25)",
         "font_title": "'Viking', 'Georgia', serif",
         "nav_label_display": "Display"
+    },
+    "skin_layout_landscape": {
+        "stats": {
+            "target": {
+                "x": 293,
+                "y": 7,
+                "align": "left"
+            },
+            "port": {
+                "x": 368,
+                "y": 7,
+                "align": "left"
+            },
+            "vuln": {
+                "x": 443,
+                "y": 7,
+                "align": "left"
+            },
+            "cred": {
+                "x": 293,
+                "y": 45,
+                "align": "left"
+            },
+            "zombie": {
+                "x": 368,
+                "y": 45,
+                "align": "left"
+            },
+            "data": {
+                "x": 443,
+                "y": 45,
+                "align": "left"
+            },
+            "gold": {
+                "x": 4,
+                "y": 77,
+                "align": "left"
+            },
+            "level": {
+                "x": 4,
+                "y": 197,
+                "align": "left"
+            },
+            "networkkb": {
+                "x": 201,
+                "y": 77,
+                "align": "left"
+            },
+            "attacks": {
+                "x": 201,
+                "y": 197,
+                "align": "left"
+            },
+            "align": "left"
+        },
+        "character": {
+            "x": 31,
+            "y": 49,
+            "w": 170,
+            "h": 170,
+            "align": "left"
+        },
+        "status": {
+            "icon_x": 257,
+            "icon_y": 79,
+            "icon_size": 46,
+            "text_x": 310,
+            "text_y": 80,
+            "sub_text_y": 105,
+            "main_font_size": 23,
+            "sub_font_size": 19,
+            "max_text_w": 166,
+            "align": "left"
+        },
+        "dialogue": {
+            "x": 257,
+            "y": 133,
+            "max_w": 219,
+            "font_size": 23,
+            "line_height": 21,
+            "max_lines": 4,
+            "margin": 4,
+            "align": "left"
+        },
+        "battery": {
+            "x": 209,
+            "y": 11,
+            "font_size": 18,
+            "align": "center"
+        }
+    },
+    "skin_layout_portrait": {
+        "stats": {
+            "target": {
+                "x": 38,
+                "y": 49,
+                "align": "left"
+            },
+            "port": {
+                "x": 112,
+                "y": 49,
+                "align": "left"
+            },
+            "vuln": {
+                "x": 186,
+                "y": 49,
+                "align": "left"
+            },
+            "cred": {
+                "x": 38,
+                "y": 87,
+                "align": "left"
+            },
+            "zombie": {
+                "x": 112,
+                "y": 87,
+                "align": "left"
+            },
+            "data": {
+                "x": 186,
+                "y": 87,
+                "align": "left"
+            },
+            "gold": {
+                "x": 4,
+                "y": 361,
+                "align": "left"
+            },
+            "level": {
+                "x": 4,
+                "y": 445,
+                "align": "left"
+            },
+            "networkkb": {
+                "x": 186,
+                "y": 361,
+                "align": "left"
+            },
+            "attacks": {
+                "x": 186,
+                "y": 445,
+                "align": "left"
+            },
+            "align": "left"
+        },
+        "character": {
+            "x": 38,
+            "y": 327,
+            "w": 145,
+            "h": 145,
+            "align": "left"
+        },
+        "status": {
+            "icon_x": 6,
+            "icon_y": 122,
+            "icon_size": 46,
+            "text_x": 60,
+            "text_y": 123,
+            "sub_text_y": 148,
+            "main_font_size": 23,
+            "sub_font_size": 19,
+            "max_text_w": 158,
+            "align": "left"
+        },
+        "dialogue": {
+            "x": 8,
+            "y": 180,
+            "max_w": 206,
+            "font_size": 23,
+            "line_height": 26,
+            "max_lines": 4,
+            "margin": 8,
+            "align": "left"
+        },
+        "battery": {
+            "x": 198,
+            "y": 10,
+            "font_size": 18,
+            "align": "center"
+        }
     }
 }

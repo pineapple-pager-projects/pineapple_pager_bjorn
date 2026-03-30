@@ -194,16 +194,11 @@ class Display:
         # Build the active layout (defaults + theme overrides)
         self.layout = self._build_layout()
 
-        # Colors from theme (bg, text, accent) with hardcoded fallbacks
-        bg = self.shared_data.theme_bg_color
+        # Colors from theme (text, accent) — bg is baked into skin image
         txt = self.shared_data.theme_text_color
         acc = self.shared_data.theme_accent_color
-        self.BG_COLOR = self.pager.rgb(bg[0], bg[1], bg[2])
         self.TEXT_COLOR = self.pager.rgb(txt[0], txt[1], txt[2])
         self.ACCENT_COLOR = self.pager.rgb(acc[0], acc[1], acc[2])
-        tc = self.shared_data.theme_title_font_color
-        self.TITLE_COLOR = self.pager.rgb(tc[0], tc[1], tc[2]) if tc else self.TEXT_COLOR
-        # Keep BLACK/WHITE for menu dialogs (always white-on-black)
         self.BLACK = self.pager.BLACK
         self.WHITE = self.pager.WHITE
 
@@ -219,6 +214,25 @@ class Display:
         self.dialog_showing = False  # Flag to pause display updates during dialogs
         self._fb_lock = threading.Lock()  # Protect framebuffer from concurrent access
         self._cleaned_up = False
+
+        # Skin background image
+        self.skin_bg_path = None
+        if self.orientation == "landscape" and self.shared_data.skin_bg_landscape:
+            self.skin_bg_path = self.shared_data.skin_bg_landscape
+        elif self.orientation == "portrait" and self.shared_data.skin_bg_portrait:
+            self.skin_bg_path = self.shared_data.skin_bg_portrait
+
+        # Skin coordinate overrides for dynamic elements
+        if self.orientation == "landscape":
+            self.skin_coords = getattr(self.shared_data, 'skin_layout_landscape', {})
+        else:
+            self.skin_coords = getattr(self.shared_data, 'skin_layout_portrait', {})
+
+        # Resolve per-element font overrides from skin coords
+        # Theme fonts are in themes/{name}/fonts/{filename}
+        theme_dir = os.path.join(PAYLOAD_DIR, "themes",
+                                 self.shared_data.config.get("theme", "loki"))
+        self._theme_fonts_dir = os.path.join(theme_dir, "fonts")
 
         # Brightness/dim settings
         self.screen_brightness = getattr(self.shared_data, 'screen_brightness', 80)
@@ -444,7 +458,7 @@ class Display:
         def _pc(key, default):
             v = pm.get(key)
             return self.pager.rgb(v[0], v[1], v[2]) if v else default
-        pause_bg_color = _pc('bg', self.BG_COLOR)
+        pause_bg_color = _pc('bg', self.BLACK)
         pause_text_color = _pc('text', self.TEXT_COLOR)
         pause_accent_color = _pc('accent', self.ACCENT_COLOR)
 
@@ -480,20 +494,11 @@ class Display:
             else:
                 self.pager.fill_rect(0, 0, self.width, self.height, pause_bg_color)
 
-            show_title = getattr(self.shared_data, 'theme_show_pause_title', True)
-
-            # Vertical offset: push content down when title is hidden (baked into bg)
-            y_off = 85 if not show_title else 0
+            # Title is baked into pause background image
+            y_off = 85
 
             box_y = int(self.height * 0.10) - 3
             box_h = int(self.height * 0.80)
-            if not pause_bg:
-                self.pager.fill_rect(10, box_y, self.width - 20, box_h, pause_bg_color)
-
-            if show_title:
-                title_y = box_y + 15
-                title_fs = self._fit_font_size("MENU", self.font_viking, btn_w, 30)
-                self.pager.draw_ttf_centered(title_y, "MENU", pause_text_color, self.font_viking, title_fs)
 
             bright_color = pause_text_color if selected == 0 else pause_accent_color
 
@@ -622,7 +627,7 @@ class Display:
         def _pc(key, default):
             v = pm.get(key)
             return self.pager.rgb(v[0], v[1], v[2]) if v else default
-        pause_bg_color = _pc('bg', self.BG_COLOR)
+        pause_bg_color = _pc('bg', self.BLACK)
         pause_text_color = _pc('text', self.TEXT_COLOR)
         pause_accent_color = _pc('accent', self.ACCENT_COLOR)
 
@@ -657,19 +662,9 @@ class Display:
             else:
                 self.pager.fill_rect(0, 0, self.width, self.height, pause_bg_color)
 
-            show_title = getattr(self.shared_data, 'theme_show_pause_title', True)
-
-            # Dialog box
+            # Title is baked into pause background image
             box_x, box_y = 10, 10
             box_w, box_h = self.width - 20, self.height - 20
-            if not pause_bg:
-                self.pager.fill_rect(box_x, box_y, box_w, box_h, pause_bg_color)
-
-            # Title
-            if show_title:
-                title_fs = self._fit_font_size("MENU", self.font_viking, btn_w, 30)
-                title_w = self.pager.ttf_width("MENU", self.font_viking, title_fs)
-                self.pager.draw_ttf((self.width - title_w) // 2, 17, "MENU", pause_text_color, self.font_viking, title_fs)
 
             # Brightness section
             bright_color = pause_text_color if selected == 0 else pause_accent_color
@@ -966,7 +961,7 @@ class Display:
         else:
             self.pager.hline(L["x"], L["y"] + L["h"] - 1, L["w"], self.TEXT_COLOR)
 
-        title = self.shared_data.display_name
+        title = self.shared_data.theme_name_display
         fs = getattr(self.shared_data, 'theme_title_font_size', None) or L["title_font_size"]
         tx = L["x"] + 6
         margin = 4
@@ -1204,20 +1199,221 @@ class Display:
     # Render + main loop
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Skin rendering — draw only dynamic elements over background image
+    # ------------------------------------------------------------------
+
+    def _get_skin_coord(self, element, key, default):
+        """Get a skin coordinate override, falling back to default."""
+        elem = self.skin_coords.get(element, {})
+        return elem.get(key, default)
+
+    def _resolve_font(self, skin_section, default_font):
+        """Resolve a font path from a skin section's 'font' field.
+        Accepts a filename (looked up in theme fonts dir) or absolute path."""
+        font_name = skin_section.get("font")
+        if not font_name:
+            return default_font
+        # Try as filename in theme fonts directory
+        theme_path = os.path.join(self._theme_fonts_dir, font_name)
+        if os.path.isfile(theme_path):
+            return theme_path
+        # Try as absolute path
+        if os.path.isfile(font_name):
+            return font_name
+        logger.debug(f"Font not found: {font_name}, using default")
+        return default_font
+
+    def _resolve_color(self, skin_section, key, default_color):
+        """Resolve a color from a skin section. Accepts [r,g,b] array."""
+        color_val = skin_section.get(key)
+        if color_val and isinstance(color_val, (list, tuple)) and len(color_val) == 3:
+            return self.pager.rgb(color_val[0], color_val[1], color_val[2])
+        return default_color
+
+    def _draw_aligned_text(self, x, y, text, color, font, font_size, align="left"):
+        """Draw text with alignment. x is the anchor point.
+        align: 'left' = x is left edge, 'center' = x is center point, 'right' = x is right edge."""
+        if align == "center":
+            tw = self.pager.ttf_width(text, font, font_size)
+            x = x - tw // 2
+        elif align == "right":
+            tw = self.pager.ttf_width(text, font, font_size)
+            x = x - tw
+        self.pager.draw_ttf(x, y, text, color, font, font_size)
+
+    def draw_skin_bg(self):
+        """Draw the full-resolution skin background image."""
+        try:
+            self.pager.draw_image_file_scaled(0, 0, self.layout["screen_w"],
+                                              self.layout["screen_h"], self.skin_bg_path)
+        except Exception as e:
+            logger.error(f"Could not draw skin background: {e}")
+
+    def draw_skin_stats(self):
+        """Draw all stat values at exact coordinates from theme.json.
+        Every stat uses: x, y = exact pixel position. No centering math."""
+        skin_stats = self.skin_coords.get("stats", {})
+        default_fs = 23
+        stats_font = self._resolve_font(skin_stats, self.font_arial)
+        stats_color = self._resolve_color(skin_stats, "color", self.TEXT_COLOR)
+
+        all_stats = [
+            ('target', self.shared_data.targetnbr),
+            ('port', self.shared_data.portnbr),
+            ('vuln', self.shared_data.vulnnbr),
+            ('cred', self.shared_data.crednbr),
+            ('zombie', self.shared_data.zombiesnbr),
+            ('data', self.shared_data.datanbr),
+            ('gold', self.shared_data.coinnbr),
+            ('level', self.shared_data.levelnbr),
+            ('networkkb', self.shared_data.networkkbnbr),
+            ('attacks', self.shared_data.attacksnbr),
+        ]
+
+        stats_align = skin_stats.get("align", "left")
+
+        for stat_name, value in all_stats:
+            cfg = skin_stats.get(stat_name, {})
+            if "x" not in cfg or "y" not in cfg:
+                continue  # skip stats without coordinates
+            text_x = cfg["x"]
+            text_y = cfg["y"]
+            fs = cfg.get("font_size", default_fs)
+            color = self._resolve_color(cfg, "color", stats_color)
+            font = self._resolve_font(cfg, stats_font)
+            align = cfg.get("align", stats_align)
+            self._draw_aligned_text(text_x, text_y, str(value), color, font, fs, align)
+
+    def draw_skin_character(self):
+        """Draw animated character at exact coordinates from theme.json.
+        align: 'left' = x is left edge, 'center' = x is center of image, 'right' = x is right edge."""
+        skin_char = self.skin_coords.get("character", {})
+        if "x" not in skin_char:
+            return
+        cx = skin_char["x"]
+        cy = skin_char["y"]
+        cw = skin_char["w"]
+        ch = skin_char["h"]
+        align = skin_char.get("align", "left")
+
+        if align == "center":
+            cx = cx - cw // 2
+        elif align == "right":
+            cx = cx - cw
+
+        if self.main_image_path and os.path.exists(self.main_image_path):
+            try:
+                self.pager.draw_image_file_scaled(cx, cy, cw, ch, self.main_image_path)
+            except Exception as e:
+                logger.debug(f"Could not draw character: {e}")
+
+    def draw_skin_status(self):
+        """Draw status icon and text at exact coordinates from theme.json."""
+        skin_status = self.skin_coords.get("status", {})
+        if "text_x" not in skin_status:
+            return
+
+        # Status icon
+        show_icon = skin_status.get("show_icon", True)
+        if show_icon and self.shared_data.lokistatusimage_path and os.path.exists(self.shared_data.lokistatusimage_path):
+            icon_x = skin_status["icon_x"]
+            icon_y = skin_status["icon_y"]
+            icon_size = skin_status.get("icon_size", 46)
+            try:
+                self.pager.draw_image_file_scaled(icon_x, icon_y, icon_size, icon_size,
+                                                  self.shared_data.lokistatusimage_path)
+            except:
+                pass
+
+        # Status text
+        text_x = skin_status["text_x"]
+        text_y = skin_status["text_y"]
+        main_font_size = skin_status.get("main_font_size", 23)
+        sub_font_size = skin_status.get("sub_font_size", 19)
+        max_text_w = skin_status.get("max_text_w", 200)
+
+        status_font = self._resolve_font(skin_status, self.font_arial)
+        main_color = self._resolve_color(skin_status, "color", self.TEXT_COLOR)
+        sub_color = self._resolve_color(skin_status, "sub_color", self.ACCENT_COLOR)
+
+        status_align = skin_status.get("align", "left")
+
+        # Main status line (auto-shrink if too wide)
+        status_text = self.shared_data.lokistatustext
+        fs = main_font_size
+        while fs > 10 and self.pager.ttf_width(status_text, status_font, fs) > max_text_w:
+            fs -= 1
+        self._draw_aligned_text(text_x, text_y, status_text, main_color, status_font, fs, status_align)
+
+        # Sub status line
+        sub_y = skin_status["sub_text_y"]
+        status_text2 = self.shared_data.lokistatustext2
+        fs2 = sub_font_size
+        while fs2 > 8 and self.pager.ttf_width(status_text2, status_font, fs2) > max_text_w:
+            fs2 -= 1
+        self._draw_aligned_text(text_x, sub_y, status_text2, sub_color, status_font, fs2, status_align)
+
+    def draw_skin_dialogue(self):
+        """Draw dialogue text at exact coordinates from theme.json."""
+        skin_dlg = self.skin_coords.get("dialogue", {})
+        if "x" not in skin_dlg:
+            return
+
+        text_x = skin_dlg["x"]
+        text_y = skin_dlg["y"]
+        font_size = skin_dlg.get("font_size", 23)
+        line_height = skin_dlg.get("line_height", 21)
+        max_lines = skin_dlg.get("max_lines", 4)
+        max_w = skin_dlg.get("max_w", 220)
+
+        dlg_font = self._resolve_font(skin_dlg, self.font_arial)
+        dlg_color = self._resolve_color(skin_dlg, "color", self.TEXT_COLOR)
+
+        dlg_align = skin_dlg.get("align", "left")
+
+        if hasattr(self.shared_data, 'lokisay') and self.shared_data.lokisay:
+            clean_text = self.sanitize_text(self.shared_data.lokisay)
+            lines = self._wrap_text_pixel(clean_text, dlg_font, font_size, max_w)
+            for i, line in enumerate(lines[:max_lines]):
+                self._draw_aligned_text(text_x, text_y + i * line_height, line, dlg_color, dlg_font, font_size, dlg_align)
+
+    def draw_skin_battery(self):
+        """Draw battery text at exact coordinates from theme.json."""
+        skin_bat = self.skin_coords.get("battery", {})
+        if "x" not in skin_bat:
+            return
+        bat = self.shared_data.battery_level
+        if bat is None:
+            return
+
+        bat_text = f"{bat}"
+        if self.shared_data.battery_charging:
+            bat_text += "+"
+
+        bt_x = skin_bat["x"]
+        bt_y = skin_bat["y"]
+        bat_fs = skin_bat.get("font_size", 18)
+
+        bat_font = self._resolve_font(skin_bat, self.font_arial)
+        default_bat_color = self.ACCENT_COLOR if self.shared_data.battery_charging else self.TEXT_COLOR
+        bat_color = self._resolve_color(skin_bat, "color", default_bat_color)
+        bat_align = skin_bat.get("align", "left")
+        self._draw_aligned_text(bt_x, bt_y, bat_text, bat_color, bat_font, bat_fs, bat_align)
+
     def render_frame(self):
-        """Render complete frame."""
+        """Render complete frame using skin background + dynamic elements."""
         if self.dialog_showing:
             return
         with self._fb_lock:
             if self.dialog_showing:
                 return
-            self.pager.clear(self.BG_COLOR)
-            self.draw_header()
-            self.draw_stats_grid()
-            self.draw_status_area()
-            self.draw_dialogue_zone()
-            self.draw_frise()
-            self.draw_character_and_corner_stats()
+            self.draw_skin_bg()
+            self.draw_skin_stats()
+            self.draw_skin_status()
+            self.draw_skin_dialogue()
+            self.draw_skin_character()
+            self.draw_skin_battery()
             self.pager.flip()
 
     def run(self):
