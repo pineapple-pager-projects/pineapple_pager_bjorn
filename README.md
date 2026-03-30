@@ -584,7 +584,7 @@ A Docker-based vulnerable test environment is provided in `test_targets/`. See [
 ## Credits
 
 - **Original Bjorn**: [infinition](https://github.com/infinition/Bjorn)
-- **Pager Port**: brAinphreAk
+- **Pager Port & Loki Development**: brAinphreAk
 - **WiFi Pineapple Pager**: Hak5
 
 ### Special Thanks
@@ -594,6 +594,10 @@ A Docker-based vulnerable test environment is provided in `test_targets/`. See [
 ## License
 
 MIT License — See [LICENSE](LICENSE)
+
+This project is open source and we encourage building on it — that's the whole point. However, the MIT license **requires** that you include the copyright notice and license in any copies or substantial portions of the software. In plain terms: **if you use this code, credit the source.**
+
+It has come to our attention that code, cross-compiled binaries, and pager integration work from this project have been incorporated into other projects without any attribution. The MIPS binaries, pagerctl wrapper, pager display system, menu system, and supporting libraries in this repo represent significant original work — custom cross-compilation, hardware integration, and months of development. If you use any of it, please respect the license and give credit where it's due.
 
 ## Disclaimer
 
